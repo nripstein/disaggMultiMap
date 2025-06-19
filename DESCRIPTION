@@ -1,0 +1,31 @@
+Package: disaggMultiMap
+Type: Package
+Title: Spatio-Temporal Disaggregation For Maps With Changing Boundaries
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Noah", "Ripstein",
+      email = "noah.ripstein@mail.utoronto.ca",
+      role = c("aut", "cre")
+    )
+  )
+Description: Provides tools for spatio-temporal disaggregation of areal data across multiple 
+    time points, including support for changing polygon boundaries. Combines polygon-level 
+    observations, population rasters and optional covariate rasters to infer fine-scale 
+    spatial fields over time. Models can be efficiently fit using TMB (template model 
+    builder) and adaptive Gauss-Hermite quadrature for fast approximate inference
+    or via tmbstan for MCMC.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: TMB, RcppEigen
+LinkingTo: TMB, RcppEigen
+Imports: 
+    aghq,
+    disaggregation,
+    fmesher,
+    ggplot2,
+    rSPDE,
+    sf,
+    terra,
+    TMB
