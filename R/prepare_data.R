@@ -1,21 +1,21 @@
-#’ Prepare multi-map disaggregation data
-#’
-#’ @description
-#’ Given lists of polygon sf’s, covariate rasters, and aggregation rasters,
-#’ combines them into a single `disag_data_mmap` object ready for model fitting.
-#’ @param polygon_shapefile_list List of `sf` polygon objects, one per time point.
-#’ @param covariate_rasters_list Optional list of `SpatRaster` stacks; may be NULL.
-#’ @param aggregation_rasters_list Optional list of `SpatRaster`; if NULL, uses uniform counts.
-#’ @param id_var Name of the polygon ID column in each `sf`.
-#’ @param response_var Name of the response column.
-#’ @param sample_size_var Name of the sample-size column (for binomial models); may be NULL.
-#’ @param mesh_args Passed to `build_mesh()`.
-#’ @param na_action Logical; if TRUE, drop or impute NAs instead of stopping.
-#’ @param make_mesh Logical; if TRUE, build the spatial mesh over all polygons.
-#’ @param verbose Logical; if TRUE, print timing info.
-#’ @return An object of class `disag_data_mmap` with components:
-#’   - `polygon_data`, `covariate_data`, `aggregation_pixels`, …
-#’ @export
+#' Prepare multi-map disaggregation data
+#'
+#' @description
+#' Given lists of polygon sf's, covariate rasters, and aggregation rasters,
+#' combines them into a single 'disag_data_mmap' object ready for model fitting.
+#' @param polygon_shapefile_list List of 'sf' polygon objects, one per time point.
+#' @param covariate_rasters_list Optional list of 'SpatRaster' stacks; may be NULL.
+#' @param aggregation_rasters_list Optional list of 'SpatRaster'; if NULL, uses uniform counts.
+#' @param id_var Name of the polygon ID column in each 'sf'.
+#' @param response_var Name of the response column.
+#' @param sample_size_var Name of the sample-size column (for binomial models); may be NULL.
+#' @param mesh_args Passed to 'build_mesh()'.
+#' @param na_action Logical; if TRUE, drop or impute NAs instead of stopping.
+#' @param make_mesh Logical; if TRUE, build the spatial mesh over all polygons.
+#' @param verbose Logical; if TRUE, print timing info.
+#' @return An object of class 'disag_data_mmap' with components:
+#'   - 'polygon_data', 'covariate_data', 'aggregation_pixels', …
+#' @export
 prepare_data_mmap <- function(polygon_shapefile_list,
                               covariate_rasters_list = NULL,
                               aggregation_rasters_list = NULL,
@@ -134,23 +134,23 @@ getStartendindex_mmap <- function(covariates, polygon_data) {
   return(startendindex)
 }
 
-#’ Validate inputs to prepare_data_mmap()
-#’
-#’ @description
-#’ Check that all list-arguments are the same length (where required),
-#’ that required arguments have the correct type, and that
-#’ `id_var`, `response_var`, and `sample_size_var` are valid strings.
-#’
-#’ @param polygon_shapefile_list A list of `sf` objects.
-#’ @param covariate_rasters_list NULL or a list of `SpatRaster` objects.
-#’ @param aggregation_rasters_list NULL or a list of `SpatRaster` objects.
-#’ @param id_var Character of length 1: name of polygon ID column.
-#’ @param response_var Character of length 1: name of response column.
-#’ @param sample_size_var NULL or character of length 1: sample‐size column.
-#’ @param make_mesh Logical flag indicating whether to build a mesh.
-#’
-#’ @return Invisibly `TRUE` if all checks pass; otherwise stops with an error.
-#’ @keywords internal
+#' Validate inputs to prepare_data_mmap()
+#'
+#' @description
+#' Check that all list-arguments are the same length (where required),
+#' that required arguments have the correct type, and that
+#' 'id_var', 'response_var', and 'sample_size_var' are valid strings.
+#'
+#' @param polygon_shapefile_list A list of 'sf' objects.
+#' @param covariate_rasters_list NULL or a list of 'SpatRaster' objects.
+#' @param aggregation_rasters_list NULL or a list of 'SpatRaster' objects.
+#' @param id_var Character of length 1: name of polygon ID column.
+#' @param response_var Character of length 1: name of response column.
+#' @param sample_size_var NULL or character of length 1: sample-size column.
+#' @param make_mesh Logical flag indicating whether to build a mesh.
+#'
+#' @return Invisibly 'TRUE' if all checks pass; otherwise stops with an error.
+#' @keywords internal
 validate_prepare_data_inputs <- function(polygon_shapefile_list,
                                          covariate_rasters_list,
                                          aggregation_rasters_list,
@@ -211,35 +211,36 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
   return(invisible(TRUE))
 }
 
-#’ Process a single time point for prepare_data_mmap()
-#’
-#’ @description
-#’ Internal helper called by `prepare_data_mmap()`.
-#’ For time index `t`, it:
-#’ 1. Validates the polygon sf and rasters.
-#’ 2. Handles NAs in the response.
-#’ 3. Builds or validates the aggregation raster.
-#’ 4. Extracts and merges covariate + aggregation pixel data.
-#’ 5. Computes coordinates for mesh fitting and for prediction.
-#’ 6. Computes the start/end pixel indices per polygon.
-#’
-#’ @param t Integer time‐point index (used for messaging).
-#’ @param poly_sf An `sf` polygon object for time `t`.
-#’ @param cov_rasters A `SpatRaster` of covariates for time `t`, or NULL.
-#’ @param agg_raster A `SpatRaster` of aggregation weights for time `t`, or NULL.
-#’ @param id_var Name of the polygon ID column.
-#’ @param response_var Name of the response column.
-#’ @param sample_size_var Name of the sample‐size column, or NULL.
-#’ @param na_action Logical; if TRUE, drop/impute NAs instead of erroring.
-#’
-#’ @return A list with elements:
-#’   - `poly_data`: data.frame of polygon‐level info (incl. `poly_local_id` & `time`).
-#’   - `cov_data`: data.frame of pixel‐level covariates + `poly_local_id` + `time` + `cell`.
-#’   - `agg_pixels`: numeric vector of aggregation weights per pixel.
-#’   - `coords_fit`: coords for mesh‐building (only used pixels).
-#’   - `coords_pred`: coords for full‐extent prediction.
-#’   - `start_end_index`: integer matrix of 0‐indexed start/end for each polygon.
-#’ @keywords internal
+#' Process a single time point for prepare_data_mmap()
+#'
+#' @description
+#' Internal helper called by 'prepare_data_mmap()'.
+#' For time index 't', it:
+#' 1. Validates the polygon sf and rasters.
+#' 2. Handles NAs in the response.
+#' 3. Builds or validates the aggregation raster.
+#' 4. Extracts and merges covariate + aggregation pixel data.
+#' 5. Computes coordinates for mesh fitting and for prediction.
+#' 6. Computes the start/end pixel indices per polygon.
+#'
+#' @param t Integer time-point index (used for messaging).
+#' @param poly_sf An 'sf' polygon object for time 't'.
+#' @param cov_rasters A 'SpatRaster' of covariates for time 't', or NULL.
+#' @param agg_raster A 'SpatRaster' of aggregation weights for time 't', or NULL.
+#' @param id_var Name of the polygon ID column.
+#' @param response_var Name of the response column.
+#' @param sample_size_var Name of the sample-size column, or NULL.
+#' @param na_action Logical; if TRUE, drop/impute NAs instead of erroring.
+#'
+#' @return A list with elements:
+#'   - 'poly_data': data.frame of polygon-level info (incl. 'poly_local_id' & 'time').
+#'   - 'cov_data': data.frame of pixel-level covariates + 'poly_local_id' + 'time' + 'cell'.
+#'   - 'agg_pixels': numeric vector of aggregation weights per pixel.
+#'   - 'coords_fit': coords for mesh-building (only used pixels).
+#'   - 'coords_pred': coords for full-extent prediction.
+#'   - 'start_end_index': integer matrix of 0-indexed start/end for each polygon.
+#' @keywords internal
+
 prepare_time_point <- function(t,
                                poly_sf,
                                cov_rasters,
@@ -377,14 +378,14 @@ prepare_time_point <- function(t,
   ))
 }
 
-#’ (Internal) Build combined mesh from a list of sf polygons
-#’
-#’ @description
-#’ Just in case some maps have additional polygons outside the first extent
-#’ @param polygon_list List of `sf` objects (same CRS).
-#’ @param mesh_args Passed to `build_mesh()`.
-#’ @return An `inla.mesh` object or `NULL` if `make_mesh = FALSE`.
-#’ @keywords internal
+#' (Internal) Build combined mesh from a list of sf polygons
+#'
+#' @description
+#' Just in case some maps have additional polygons outside the first extent
+#' @param polygon_list List of 'sf' objects (same CRS).
+#' @param mesh_args Passed to 'build_mesh()'.
+#' @return An 'inla.mesh' object or 'NULL' if 'make_mesh = FALSE'.
+#' @keywords internal
 build_combined_mesh <- function(polygon_list, mesh_args, make_mesh) {
   if (!make_mesh) {
     message("A mesh is not being built. Spatial model will not run without a mesh.")

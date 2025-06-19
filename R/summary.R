@@ -1,16 +1,17 @@
-#’ Summary function for disag_data_mmap objects
-#’
-#’ @description
-#’ Prints counts of time points, polygons, pixels, per‐time largest/smallest polygon
-#’ sizes, number of covariates and their summaries and a mesh summary
-#’
-#’ @param object A `disag_data_mmap` object (from `prepare_data_mmap()`).
-#’ @return Invisibly returns a list with components:
-#’   - `n_times`, `n_polygons`, `n_pixels`
-#’   - `per_time`: data.frame with `time`, `min_pixels`, `max_pixels`
-#’   - `n_covariates`, `covariate_summaries` (named list of summaries)
-#’   - `mesh_nodes`, `mesh_triangles`
-#’ @export
+#' Summary function for disag_data_mmap objects
+#'
+#' @description
+#' Prints counts of time points, polygons, pixels, per-time largest/smallest polygon
+#' sizes, number of covariates and their summaries and a mesh summary
+#'
+#' @param object A 'disag_data_mmap' object (from 'prepare_data_mmap()').
+#' @return Invisibly returns a list with components:
+#'   - 'n_times', 'n_polygons', 'n_pixels'
+#'   - 'per_time': data.frame with 'time', 'min_pixels', 'max_pixels'
+#'   - 'n_covariates', 'covariate_summaries' (named list of summaries)
+#'   - 'mesh_nodes', 'mesh_triangles'
+#' @method summary disag_data_mmap
+#' @export
 summary.disag_data_mmap <- function(object) {
   # 1. Basic counts
   n_times    <- length(object$time_points)
@@ -81,17 +82,17 @@ summary.disag_data_mmap <- function(object) {
 }
 
 
-#’ Print method for `disag_data_mmap` objects
-#’
-#’ @description
-#’ Displays a brief overview of a multi‐map disaggregation dataset:
-#’ number of time points, total polygons, and total pixels.
-#’
-#’ @param object A `disag_data_mmap` object.
-#’
-#’ @return Invisibly returns the original `disag_data_mmap` object.
-#’ @method print disag_data_mmap
-#’ @export
+#' Print method for 'disag_data_mmap' objects
+#'
+#' @description
+#' Displays a brief overview of a multi-map disaggregation dataset:
+#' number of time points, total polygons, and total pixels.
+#'
+#' @param object A 'disag_data_mmap' object.
+#'
+#' @return Invisibly returns the original 'disag_data_mmap' object.
+#' @method print disag_data_mmap
+#' @export
 print.disag_data_mmap <- function(object) {
   n_times    <- length(object$time_points)
   n_polygons <- nrow(object$polygon_data)

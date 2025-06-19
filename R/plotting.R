@@ -1,18 +1,18 @@
-# #’ Plot polygon response data
-# #’
-# #’ @description
-# #’ Draws the prepared polygons colored by the response variable, with an optional title.
-# #’
-# #’ @param disag_data A `disag_data_mmap` object.
-# #’ @param time Integer index of time‐slice to plot (default = 1).
-# #’ @param show_title Logical; if TRUE (default), add a title “Response at time X”.
-# #’ @return A ggplot2 object.
-# #’ @examples
-# #’ # default, with title
-# #’ p1 <- plot_polygons(my_disag_data, time = 2)
-# #’ # no title
-# #’ p2 <- plot_polygons(my_disag_data, time = 2, show_title = FALSE)
-# #’ @export
+#' Plot polygon response data
+#'
+#' @description
+#' Draws the prepared polygons colored by the response variable, with an optional title.
+#'
+#' @param disag_data A 'disag_data_mmap' object.
+#' @param time Integer index of time-slice to plot (default = 1).
+#' @param show_title Logical; if TRUE (default), add a title "Response at time X".
+#' @return A ggplot2 object.
+#' @examples
+#' # default, with title
+#' p1 <- plot_polygons(my_disag_data, time = 2)
+#' # no title
+#' p2 <- plot_polygons(my_disag_data, time = 2, show_title = FALSE)
+#' @export
 plot_polygons <- function(disag_data,
                           time       = 1,
                           show_title = TRUE) {
@@ -36,17 +36,17 @@ plot_polygons <- function(disag_data,
 }
 
 
-#’ Plot a single covariate raster
-#’
-#’ @description
-#’ Renders one layer of the covariate raster stack, preserving the raster’s CRS,
-#’ and coloring by value with a Viridis scale.
-#’
-#’ @param disag_data A `disag_data_mmap` object.
-#’ @param covariate Integer index or name of the covariate layer.
-#’ @param time Integer time‐slice (default = 1).
-#’ @return A ggplot2 object.
-#’ @export
+#' Plot a single covariate raster
+#'
+#' @description
+#' Renders one layer of the covariate raster stack, preserving the raster's CRS,
+#' and coloring by value with a Viridis scale.
+#'
+#' @param disag_data A 'disag_data_mmap' object.
+#' @param covariate Integer index or name of the covariate layer.
+#' @param time Integer time-slice (default = 1).
+#' @return A ggplot2 object.
+#' @export
 plot_covariate_raster <- function(disag_data,
                                   covariate = 1,
                                   time = 1) {
@@ -94,15 +94,15 @@ plot_covariate_raster <- function(disag_data,
 
 
 
-#’ Plot the offset raster
-#’
-#’ @description
-#’ Draws the aggregation pixel values used in the fit
-#’
-#’ @param disag_data A `disag_data_mmap` object.
-#’ @param time Integer time‐slice (default = 1).
-#’ @return A ggplot2 object.
-#’ @export
+#' Plot the offset raster
+#'
+#' @description
+#' Draws the aggregation pixel values used in the fit
+#'
+#' @param disag_data A 'disag_data_mmap' object.
+#' @param time Integer time-slice (default = 1).
+#' @return A ggplot2 object.
+#' @export
 plot_aggregation_raster <- function(disag_data,
                                     time = 1) {
   # 1. Extract coords_for_fit (list or matrix)
@@ -155,19 +155,19 @@ plot_aggregation_raster <- function(disag_data,
 
 
 
-# #’ Plot the SPDE mesh with custom outer/inner boundaries
-# #’
-# #’ @param disag_data A `disag_data_mmap` object.
-# #’ @param edge_col Colour for internal mesh edges (default = "grey70").
-# #’ @param edge_size Line width for those edges (default = 0.2).
-# #’ @param outer_col Colour for the outer perimeter (default = "black").
-# #’ @param outer_size Line width for the outer perimeter (default = 1).
-# #’ @param inner_col Colour for any inner perimeter (default = "blue").
-# #’ @param inner_size Line width for inner perimeter (default = 1).
-# #’ @param node_col Colour for mesh nodes (default = "black").
-# #’ @param node_size Size for mesh nodes (default = 0.5).
-# #’ @return A ggplot2 object.
-# #’ @export
+#' Plot the SPDE mesh with custom outer/inner boundaries
+#'
+#' @param disag_data A 'disag_data_mmap' object.
+#' @param edge_col Colour for internal mesh edges (default = "grey70").
+#' @param edge_size Line width for those edges (default = 0.2).
+#' @param outer_col Colour for the outer perimeter (default = "black").
+#' @param outer_size Line width for the outer perimeter (default = 1).
+#' @param inner_col Colour for any inner perimeter (default = "blue").
+#' @param inner_size Line width for inner perimeter (default = 1).
+#' @param node_col Colour for mesh nodes (default = "black").
+#' @param node_size Size for mesh nodes (default = 0.5).
+#' @return A ggplot2 object.
+#' @export
 plot_mesh <- function(disag_data,
                       edge_col   = "grey70",
                       edge_size  = 0.2,
@@ -268,17 +268,18 @@ plot_mesh <- function(disag_data,
 
 
 
-# #’ Summary plot of prepared data
-# #’
-# #’ @description
-# #’ Combines polygons, aggregation raster, mesh, and (if present) a covariate
-# #’ into a 2×2 grid.
-# #’
-# #’ @param disag_data A `disag_data_mmap` object.
-# #’ @param covariate Integer or name of the covariate to display (default = 1).
-# #’ @param time Integer time‐slice (default = 1).
-# #’ @return A ggdraw object (from cowplot) which can be printed.
-# #’ @export
+#' Visual summary plot of prepared data
+#'
+#' @description
+#' Combines polygons, aggregation raster, mesh, and (if present) a covariate
+#' into a 2×2 grid.
+#'
+#' @param disag_data A `disag_data_mmap` object.
+#' @param covariate Integer or name of the covariate to display (default = 1).
+#' @param time Integer time‐slice (default = 1).
+#' @return A ggdraw object (from cowplot) which can be printed.
+#' @method plot disag_data_mmap
+#' @export
 plot_prepare_summary <- function(disag_data,
                                  covariate = 1,
                                  time      = 1) {
@@ -319,17 +320,17 @@ plot_prepare_summary <- function(disag_data,
 }
 
 
-# #’ Summary plot of prepared data
-# #’
-# #’ @description
-# #’ Combines polygons, aggregation raster, mesh, and (if present) a covariate
-# #’ into a 2×2 grid.
-# #’
-# #’ @param disag_data A `disag_data_mmap` object.
-# #’ @param covariate Integer or name of the covariate to display (default = 1).
-# #’ @param time Integer time‐slice (default = 1).
-# #’ @return A ggdraw object (from cowplot) which can be printed.
-# #’ @export
+#' Visual summary plot of prepared data
+#'
+#' @description
+#' Combines polygons, aggregation raster, mesh, and (if present) a covariate
+#' into a 2×2 grid.
+#'
+#' @param disag_data A `disag_data_mmap` object.
+#' @param covariate Integer or name of the covariate to display (default = 1).
+#' @param time Integer time‐slice (default = 1).
+#' @return A ggdraw object (from cowplot) which can be printed.
+#' @export
 plot.disag_data_mmap <- function(disag_data,
                                  covariate = 1,
                                  time = 1) {

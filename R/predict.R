@@ -1,19 +1,17 @@
-#’ Extract design & projection matrices for prediction
-#’
-#’ @description
-#’ Internal helper for `predict.disag_model_mmap_aghq()`.
-#’ Builds per‐time design matrices (with intercept), the SPDE projection matrix,
-#’ and the coordinate table for raster reconstruction.
-#’
-#’ @param data A `disag_data_mmap` object (from `prepare_data_mmap()`).
-#’ @param new_data Optional new covariate data:
-#’   - a single `SpatRaster` (recycled across all times), or
-#’   - a list of length `length(data$time_points)` of `SpatRaster` objects.
-#’ @return A list with elements:
-#’   - `X_list`: list of design matrices (each n_cells × p, with “Intercept”).
-#’   - `A`: SPDE projection matrix (n_cells × n_knots).
-#’   - `coords`: data.frame of x/y coordinates for each cell.
-#’ @keywords internal
+#' @description
+#' Internal helper for 'predict.disag_model_mmap_aghq()'.
+#' Builds per-time design matrices (with intercept), the SPDE projection matrix,
+#' and the coordinate table for raster reconstruction.
+#'
+#' @param data A 'disag_data_mmap' object (from 'prepare_data_mmap()').
+#' @param new_data Optional new covariate data:
+#'   - a single 'SpatRaster' (recycled across all times), or
+#'   - a list of length 'length(data$time_points)' of 'SpatRaster' objects.
+#' @return A list with elements:
+#'   - 'X_list': list of design matrices (each n_cells × p, with "Intercept").
+#'   - 'A': SPDE projection matrix (n_cells × n_knots).
+#'   - 'coords': data.frame of x/y coordinates for each cell.
+#' @keywords internal
 get_predict_matrices <- function(data, new_data = NULL) {
   #-- Validate inputs --
   stopifnot(inherits(data, "disag_data_mmap"))
@@ -75,24 +73,25 @@ get_predict_matrices <- function(data, new_data = NULL) {
   )
 }
 
-#’ Predict mean & credible intervals for AGHQ‐fitted disaggregation model
-#’
-#’ @description
-#’ Given a `disag_model_mmap_aghq` object, draws from the AGHQ marginal, builds
-#’ per-cell posterior samples, and returns means and credible‐interval rasters.
-#’
-#’ @param object A `disag_model_mmap_aghq` fit (from `disag_model_mmap_aghq()`).
-#’ @param new_data Optional covariates for prediction (see helper).
-#’ @param predict_iid Currently not implemented; must be FALSE.
-#’ @param N Number of marginal draws to sample (default 1000).
-#’ @param CI Credible‐interval level in (0,1) (default 0.95).
-#’ @param verbose If TRUE, prints runtime in minutes.
-#’ @param ... Unused.
-#’
-#’ @return An object of class `disag_prediction_mmap_aghq` containing:
-#’   - `mean_prediction`: list of SpatRasters (`prediction`, `field`, `covariates`).
-#’   - `uncertainty_prediction`: list with `predictions_ci$lower` & `upper`.
-#’ @export
+#' Predict mean & credible intervals for AGHQ-fitted disaggregation model
+#'
+#' @description
+#' Given a 'disag_model_mmap_aghq' object, draws from the AGHQ marginal, builds
+#' per-cell posterior samples, and returns means and credible-interval rasters.
+#'
+#' @param object A 'disag_model_mmap_aghq' fit (from 'disag_model_mmap_aghq()').
+#' @param new_data Optional covariates for prediction (see helper).
+#' @param predict_iid Currently not implemented; must be FALSE.
+#' @param N Number of marginal draws to sample (default 1000).
+#' @param CI Credible-interval level in (0,1) (default 0.95).
+#' @param verbose If TRUE, prints runtime in minutes.
+#' @param ... Unused.
+#'
+#' @return An object of class 'disag_prediction_mmap_aghq' containing:
+#'   - 'mean_prediction': list of SpatRasters ('prediction', 'field', 'covariates').
+#'   - 'uncertainty_prediction': list with 'predictions_ci$lower' & 'upper'.
+#' @method predict disag_model_mmap_aghq
+#' @export
 predict.disag_model_mmap_aghq <- function(object,
                                           new_data    = NULL,
                                           predict_iid = FALSE,

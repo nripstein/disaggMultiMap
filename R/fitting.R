@@ -1,21 +1,21 @@
-#’ Fit a multi‐map disaggregation model via TMB + AGHQ
-#’
-#’ @description
-#’ Builds the TMB ADFun object for a multi‐map disaggregation model, then
-#’ runs a higher‐order Laplace approximation via AGHQ.
-#’
-#’ @param data A `disag_data_mmap` object (from `prepare_data_mmap()`).
-#’ @param priors Optional named list of prior specifications (see internal helper).
-#’ @param family One of `"gaussian"`, `"binomial"`, `"poisson"`, or `"negbinomial"`.
-#’ @param link One of `"identity"`, `"logit"`, or `"log"`.
-#’ @param k Integer ≥ 1: number of quadrature nodes for AGHQ (`1` = Laplace).
-#’ @param field Logical: include the spatial random field?
-#’ @param iid Logical: include polygon‐specific IID effects?
-#’ @param silent Logical: if TRUE, suppress TMB’s console output.
-#’ @param starting_values Optional named list of starting parameter values.
-#’ @param verbose Logical: if TRUE, print total runtime.
-#’ @return An object of class `disag_model_mmap_aghq` (a list with `$aghq_model`, `$data`, and `$model_setup`).
-#’ @export
+#' Fit a multi-map disaggregation model via TMB + AGHQ
+#'
+#' @description
+#' Builds the TMB ADFun object for a multi-map disaggregation model, then
+#' runs a higher-order Laplace approximation via AGHQ.
+#'
+#' @param data A 'disag_data_mmap' object (from 'prepare_data_mmap()').
+#' @param priors Optional named list of prior specifications (see internal helper).
+#' @param family One of "gaussian", "binomial", "poisson", or "negbinomial".
+#' @param link One of "identity", "logit", or "log".
+#' @param k Integer ≥ 1: number of quadrature nodes for AGHQ ('1' = Laplace).
+#' @param field Logical: include the spatial random field?
+#' @param iid Logical: include polygon-specific IID effects?
+#' @param silent Logical: if TRUE, suppress TMB's console output.
+#' @param starting_values Optional named list of starting parameter values.
+#' @param verbose Logical: if TRUE, print total runtime.
+#' @return An object of class 'disag_model_mmap_aghq' (a list with '$aghq_model', '$data', and '$model_setup').
+#' @export
 disag_model_mmap_aghq <- function(data,
                                   priors          = NULL,
                                   family          = "poisson",
@@ -79,23 +79,22 @@ disag_model_mmap_aghq <- function(data,
   return(out)
 }
 
-
-#’ Build the TMB ADFun object for multi‐map disaggregation
-#’
-#’ @description
-#’ Internal helper. Converts data, priors, and model settings into the list
-#’ of inputs required by `TMB::MakeADFun()`.
-#’
-#’ @param data A `disag_data_mmap` object.
-#’ @param priors NULL or named list overriding default hyperpriors.
-#’ @param family One of `"gaussian"`, `"binomial"`, `"poisson"`, `"negbinomial"`.
-#’ @param link One of `"identity"`, `"logit"`, `"log"`.
-#’ @param field Logical: include spatial field?
-#’ @param iid Logical: include IID polygon effects?
-#’ @param silent Logical: pass to `MakeADFun()` to suppress output.
-#’ @param starting_values NULL or named list of starting values.
-#’ @return A `TMB::ADFun` object ready for `marginal_laplace_tmb()`.
-#’ @keywords internal
+#' Build the TMB ADFun object for multi-map disaggregation
+#'
+#' @description
+#' Internal helper. Converts data, priors, and model settings into the list
+#' of inputs required by 'TMB::MakeADFun()'.
+#'
+#' @param data A 'disag_data_mmap' object.
+#' @param priors NULL or named list overriding default hyperpriors.
+#' @param family One of "gaussian", "binomial", "poisson", "negbinomial".
+#' @param link One of "identity", "logit", "log".
+#' @param field Logical: include spatial field?
+#' @param iid Logical: include IID polygon effects?
+#' @param silent Logical: pass to 'MakeADFun()' to suppress output.
+#' @param starting_values NULL or named list of starting values.
+#' @return A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
+#' @keywords internal
 make_model_object_mmap <- function(data,
                                    priors          = NULL,
                                    family          = 'gaussian',

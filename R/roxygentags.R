@@ -1,6 +1,6 @@
 #' Roxygen commands
 #'
-#' @useDynLib myPkg
+#' @useDynLib disaggMultiMap
 #'
 dummy <- function(){
   return(NULL)
