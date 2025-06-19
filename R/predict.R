@@ -1,3 +1,5 @@
+#' Construct design and projection matrices for prediction
+#'
 #' @description
 #' Internal helper for 'predict.disag_model_mmap_aghq()'.
 #' Builds per-time design matrices (with intercept), the SPDE projection matrix,
@@ -161,8 +163,8 @@ predict.disag_model_mmap_aghq <- function(object,
     lam_mat  <- link_fn(lin_all)
 
     # 5. Summarize posterior mean
-    mean_vals  <- rowMeans(lam_mat)
-    field_vals <- rowMeans(field_mat)
+    mean_vals  <- Matrix::rowMeans(lam_mat)
+    field_vals <- Matrix::rowMeans(field_mat)
 
     # 6. Build SpatRasters for mean & components
     mean_preds[[i]]  <- terra::rast(cbind(coords, y = mean_vals),  type = "xyz")
