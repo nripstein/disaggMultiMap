@@ -25,6 +25,7 @@ Imports:
     disaggregation,
     fmesher,
     ggplot2,
+    Matrix,
     rSPDE,
     sf,
     terra,

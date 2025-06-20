@@ -105,5 +105,17 @@ print.disag_data_mmap <- function(object) {
   cat(sprintf("Total pixels: %d\n\n", n_pixels))
 
   cat("Use `summary(...)` for more details.\n")
-  invisible(object)
+  return(invisible(object))
+}
+
+
+#' Summarize model fit for multi-map disaggregation model fit with AGHQ using AGHQ's builtin summary
+#'
+#' @param object
+#'
+#' @returns
+#' @export
+print.disag_model_mmap_aghq <- function(object) {
+  cat(summary(object$aghq_model)$summarytable, "\n")
+  return(invisible(object))
 }
