@@ -2,6 +2,6 @@
 #'
 #' @useDynLib disaggMultiMap
 #'
-dummy <- function(){
+dummy <- function() {
   return(NULL)
 }

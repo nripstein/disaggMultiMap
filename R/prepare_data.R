@@ -19,8 +19,8 @@
 prepare_data_mmap <- function(polygon_shapefile_list,
                               covariate_rasters_list = NULL,
                               aggregation_rasters_list = NULL,
-                              id_var = 'area_id',
-                              response_var = 'response',
+                              id_var = "area_id",
+                              response_var = "response",
                               sample_size_var = NULL,
                               mesh_args = NULL,
                               na_action = FALSE,
@@ -59,12 +59,12 @@ prepare_data_mmap <- function(polygon_shapefile_list,
   )
 
   # Extract each element across time:
-  polygon_data_list      <- lapply(per_time, `[[`, "poly_data")
-  covariate_data_list    <- lapply(per_time, `[[`, "cov_data")
-  aggregation_pixels_list<- lapply(per_time, `[[`, "agg_pixels")
-  coords_for_fit_list    <- lapply(per_time, `[[`, "coords_fit")
+  polygon_data_list <- lapply(per_time, `[[`, "poly_data")
+  covariate_data_list <- lapply(per_time, `[[`, "cov_data")
+  aggregation_pixels_list <- lapply(per_time, `[[`, "agg_pixels")
+  coords_for_fit_list <- lapply(per_time, `[[`, "coords_fit")
   coords_for_prediction_list <- lapply(per_time, `[[`, "coords_pred")
-  start_end_index_list   <- lapply(per_time, `[[`, "start_end_index")
+  start_end_index_list <- lapply(per_time, `[[`, "start_end_index")
 
   # Combine data across time points
   polygon_data_combined <- do.call(rbind, polygon_data_list)
@@ -87,12 +87,12 @@ prepare_data_mmap <- function(polygon_shapefile_list,
     aggregation_pixels = aggregation_pixels_combined,
     coords_for_fit = coords_for_fit_combined,
     coords_for_prediction = coords_for_prediction_combined,
-    start_end_index = start_end_index_list,  # kept as list by time point
+    start_end_index = start_end_index_list, # kept as list by time point
     mesh = mesh,
     time_points = seq_len(n_times)
   )
 
-  class(disag_data_mmap) <- c('disag_data_mmap', 'list')
+  class(disag_data_mmap) <- c("disag_data_mmap", "list")
 
   if (verbose == TRUE) {
     end_time <- Sys.time()
@@ -108,7 +108,7 @@ prepare_data_mmap <- function(polygon_shapefile_list,
 # helper function using local polygon IDs
 getStartendindex_mmap <- function(covariates, polygon_data) {
   # Ensure that covariates and polygon_data have the column 'poly_local_id' generated in prepare_data_mmap()
-  if(!("poly_local_id" %in% names(covariates)) || !("poly_local_id" %in% names(polygon_data))) {
+  if (!("poly_local_id" %in% names(covariates)) || !("poly_local_id" %in% names(polygon_data))) {
     stop("Both covariates and polygon_data must contain the 'poly_local_id' column.")
   }
 
@@ -117,7 +117,7 @@ getStartendindex_mmap <- function(covariates, polygon_data) {
 
   startendindex <- lapply(unique_ids, function(pid) {
     idx <- which(covariates$poly_local_id == pid)
-    if(length(idx) == 0) stop("No matching covariate pixels found for poly_local_id ", pid)
+    if (length(idx) == 0) stop("No matching covariate pixels found for poly_local_id ", pid)
     range(idx)
   })
 
@@ -160,7 +160,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
                                          make_mesh) {
   # polygon list
   if (!is.list(polygon_shapefile_list) ||
-      length(polygon_shapefile_list) < 1) {
+    length(polygon_shapefile_list) < 1) {
     stop("`polygon_shapefile_list` must be a non-empty list of sf objects.")
   }
   if (any(!vapply(polygon_shapefile_list, inherits, logical(1), what = "sf"))) {
@@ -172,7 +172,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
   # covariate list
   if (!is.null(covariate_rasters_list)) {
     if (!is.list(covariate_rasters_list) ||
-        length(covariate_rasters_list) != n_times) {
+      length(covariate_rasters_list) != n_times) {
       stop("`covariate_rasters_list` must be NULL or a list of length ", n_times, ".")
     }
     if (any(!vapply(covariate_rasters_list, inherits, logical(1), what = "SpatRaster"))) {
@@ -183,7 +183,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
   # aggregation list
   if (!is.null(aggregation_rasters_list)) {
     if (!is.list(aggregation_rasters_list) ||
-        length(aggregation_rasters_list) != n_times) {
+      length(aggregation_rasters_list) != n_times) {
       stop("`aggregation_rasters_list` must be NULL or a list of length ", n_times, ".")
     }
     if (any(!vapply(aggregation_rasters_list, inherits, logical(1), what = "SpatRaster"))) {
@@ -199,7 +199,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
     stop("`response_var` must be a single string naming the response column.")
   }
   if (!is.null(sample_size_var) &&
-      (!is.character(sample_size_var) || length(sample_size_var) != 1)) {
+    (!is.character(sample_size_var) || length(sample_size_var) != 1)) {
     stop("`sample_size_var` must be NULL or a single string naming the sample-size column.")
   }
 
@@ -262,7 +262,7 @@ prepare_time_point <- function(t,
 
   #-- 2. Handle missing responses --
   resp_vals <- poly_sf[[response_var]]
-  na_resp   <- is.na(resp_vals)
+  na_resp <- is.na(resp_vals)
   if (any(na_resp)) {
     if (na_action) {
       poly_sf <- poly_sf[!na_resp, ]
@@ -286,20 +286,20 @@ prepare_time_point <- function(t,
   #-- 4. Merge covariate & aggregation pixel data --
   # 4a) Build poly_data with local IDs
   poly_sf$poly_local_id <- seq_len(nrow(poly_sf))
-  poly_sf$time         <- t
+  poly_sf$time <- t
   poly_data <- disaggregation::getPolygonData(
     poly_sf, id_var, response_var, sample_size_var
   )
   poly_data$poly_local_id <- poly_sf$poly_local_id
-  poly_data$time          <- t
+  poly_data$time <- t
 
   # 4b) Combine rasters for extraction
   if (is.null(cov_rasters)) {
-    rast_comb   <- agg_raster
-    cov_names   <- character(0)
+    rast_comb <- agg_raster
+    cov_names <- character(0)
   } else {
-    rast_comb   <- c(cov_rasters, agg_raster)
-    cov_names   <- names(cov_rasters)
+    rast_comb <- c(cov_rasters, agg_raster)
+    cov_names <- names(cov_rasters)
   }
 
   # 4c) Extract cell values and merge with polygon info
@@ -308,7 +308,7 @@ prepare_time_point <- function(t,
     terra::vect(poly_sf),
     cells = TRUE,
     na.rm = TRUE,
-    ID   = TRUE
+    ID = TRUE
   )
   # Temporarily tag rows to merge back
   poly_data$temp_id <- seq_len(nrow(poly_data))
@@ -322,9 +322,9 @@ prepare_time_point <- function(t,
   cov_data$temp_id <- NULL
 
   # 4d) Separate aggregation weights
-  agg_filter  <- names(cov_data) == "aggregation_raster"
-  agg_pixels  <- as.numeric(cov_data[, agg_filter])
-  cov_data    <- cov_data[, !agg_filter, drop = FALSE]
+  agg_filter <- names(cov_data) == "aggregation_raster"
+  agg_pixels <- as.numeric(cov_data[, agg_filter])
+  cov_data <- cov_data[, !agg_filter, drop = FALSE]
 
   # 4e) Handle NAs in aggregation weights
   na_agg <- is.na(agg_pixels)
@@ -340,7 +340,7 @@ prepare_time_point <- function(t,
   # 4f) Handle NAs in covariates (if any exist)
   if (!is.null(cov_rasters)) {
     cov_cols <- setdiff(names(cov_data), c("poly_local_id", "cell", "time"))
-    na_cov   <- unlist(lapply(cov_data[, cov_cols, drop = FALSE], function(x) any(is.na(x))))
+    na_cov <- unlist(lapply(cov_data[, cov_cols, drop = FALSE], function(x) any(is.na(x))))
     if (any(na_cov)) {
       if (na_action) {
         for (col in cov_cols) {
@@ -392,10 +392,9 @@ build_combined_mesh <- function(polygon_list, mesh_args, make_mesh) {
     return(NULL)
   }
   combined_geoms <- do.call(c, lapply(polygon_list, sf::st_geometry))
-  combined_sf    <- sf::st_sf(
+  combined_sf <- sf::st_sf(
     geometry = sf::st_combine(combined_geoms),
     crs      = sf::st_crs(polygon_list[[1]])
   )
   disaggregation::build_mesh(combined_sf, mesh_args)
 }
-

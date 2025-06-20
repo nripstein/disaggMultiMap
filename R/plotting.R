@@ -14,9 +14,9 @@
 #' p2 <- plot_polygons(my_disag_data, time = 2, show_title = FALSE)
 #' @export
 plot_polygons <- function(disag_data,
-                          time       = 1,
+                          time = 1,
                           show_title = TRUE) {
-  sf_obj     <- disag_data$polygon_shapefile_list[[time]]
+  sf_obj <- disag_data$polygon_shapefile_list[[time]]
   field_name <- disag_data$shapefile_names$response_var
   # Build map
   p <- ggplot2::ggplot(sf_obj) +
@@ -64,8 +64,10 @@ plot_covariate_raster <- function(disag_data,
   # 2. Resolve which layer
   if (is.character(covariate)) {
     if (!covariate %in% lyr_names) {
-      stop("Covariate '", covariate, "' not found; available: ",
-           paste(lyr_names, collapse = ", "))
+      stop(
+        "Covariate '", covariate, "' not found; available: ",
+        paste(lyr_names, collapse = ", ")
+      )
     }
     lyr <- covariate
   } else {
@@ -108,8 +110,12 @@ plot_aggregation_raster <- function(disag_data,
   # 1. Extract coords_for_fit (list or matrix)
   cf <- disag_data$coords_for_fit
   coords <- if (is.list(cf)) {
-    if (length(cf) < time) stop("coords_for_fit has length ", length(cf),
-                                " but you requested time = ", time)
+    if (length(cf) < time) {
+      stop(
+        "coords_for_fit has length ", length(cf),
+        " but you requested time = ", time
+      )
+    }
     cf[[time]]
   } else if (is.matrix(cf) || inherits(cf, "data.frame")) {
     as.matrix(cf)
@@ -120,8 +126,12 @@ plot_aggregation_raster <- function(disag_data,
   # 2. Extract aggregation_pixels (list or vector)
   ap <- disag_data$aggregation_pixels
   agg_vals <- if (is.list(ap)) {
-    if (length(ap) < time) stop("aggregation_pixels has length ", length(ap),
-                                " but you requested time = ", time)
+    if (length(ap) < time) {
+      stop(
+        "aggregation_pixels has length ", length(ap),
+        " but you requested time = ", time
+      )
+    }
     ap[[time]]
   } else if (is.numeric(ap)) {
     ap
@@ -130,14 +140,16 @@ plot_aggregation_raster <- function(disag_data,
   }
 
   if (nrow(coords) != length(agg_vals)) {
-    stop("Number of coords (", nrow(coords),
-         ") does not match number of aggregation values (", length(agg_vals), ")")
+    stop(
+      "Number of coords (", nrow(coords),
+      ") does not match number of aggregation values (", length(agg_vals), ")"
+    )
   }
 
   # 3. Build data.frame
   df <- data.frame(
-    x = coords[,1],
-    y = coords[,2],
+    x = coords[, 1],
+    y = coords[, 2],
     z = agg_vals
   )
 
@@ -169,46 +181,48 @@ plot_aggregation_raster <- function(disag_data,
 #' @return A ggplot2 object.
 #' @export
 plot_mesh <- function(disag_data,
-                      edge_col   = "grey70",
-                      edge_size  = 0.2,
-                      outer_col  = "black",
+                      edge_col = "grey70",
+                      edge_size = 0.2,
+                      outer_col = "black",
                       outer_size = 1,
-                      inner_col  = "blue",
+                      inner_col = "blue",
                       inner_size = 1,
-                      node_col   = "black",
-                      node_size  = 0.5) {
+                      node_col = "black",
+                      node_size = 0.5) {
   mesh <- disag_data$mesh
   if (is.null(mesh)) stop("No mesh found in disag_data$mesh")
 
   # 1. All triangle edges
-  tv  <- mesh$graph$tv
-  idx <- rbind(tv[,1:2,drop=FALSE],
-               tv[,2:3,drop=FALSE],
-               tv[,c(3,1),drop=FALSE])
+  tv <- mesh$graph$tv
+  idx <- rbind(
+    tv[, 1:2, drop = FALSE],
+    tv[, 2:3, drop = FALSE],
+    tv[, c(3, 1), drop = FALSE]
+  )
   edges_df <- data.frame(
-    x    = mesh$loc[idx[,1],1],
-    y    = mesh$loc[idx[,1],2],
-    xend = mesh$loc[idx[,2],1],
-    yend = mesh$loc[idx[,2],2]
+    x    = mesh$loc[idx[, 1], 1],
+    y    = mesh$loc[idx[, 1], 2],
+    xend = mesh$loc[idx[, 2], 1],
+    yend = mesh$loc[idx[, 2], 2]
   )
 
   # 2. Outer perimeter segments
   bnd_idx <- mesh$segm$bnd$idx
   outer_df <- data.frame(
-    x    = mesh$loc[bnd_idx[,1],1],
-    y    = mesh$loc[bnd_idx[,1],2],
-    xend = mesh$loc[bnd_idx[,2],1],
-    yend = mesh$loc[bnd_idx[,2],2]
+    x    = mesh$loc[bnd_idx[, 1], 1],
+    y    = mesh$loc[bnd_idx[, 1], 2],
+    xend = mesh$loc[bnd_idx[, 2], 1],
+    yend = mesh$loc[bnd_idx[, 2], 2]
   )
 
   # 3. Inner perimeter segments (if any)
   if (!is.null(mesh$segm$int$idx) && nrow(mesh$segm$int$idx) > 0) {
     int_idx <- mesh$segm$int$idx
     inner_df <- data.frame(
-      x    = mesh$loc[int_idx[,1],1],
-      y    = mesh$loc[int_idx[,1],2],
-      xend = mesh$loc[int_idx[,2],1],
-      yend = mesh$loc[int_idx[,2],2]
+      x    = mesh$loc[int_idx[, 1], 1],
+      y    = mesh$loc[int_idx[, 1], 2],
+      xend = mesh$loc[int_idx[, 2], 1],
+      yend = mesh$loc[int_idx[, 2], 2]
     )
   } else {
     inner_df <- NULL
@@ -216,48 +230,51 @@ plot_mesh <- function(disag_data,
 
   # 4. Nodes
   nodes_df <- data.frame(
-    x = mesh$loc[,1],
-    y = mesh$loc[,2]
+    x = mesh$loc[, 1],
+    y = mesh$loc[, 2]
   )
 
   # 5. Build plot
   p <- ggplot2::ggplot() +
     # a) light grey mesh edges
     ggplot2::geom_segment(
-      data     = edges_df,
-      ggplot2::aes(x=x, y=y, xend=xend, yend=yend),
-      color    = edge_col,
+      data = edges_df,
+      ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+      color = edge_col,
       linewidth = edge_size,
-      lineend  = "round",
-      na.rm    = TRUE
+      lineend = "round",
+      na.rm = TRUE
     ) +
     # b) outer perimeter
     ggplot2::geom_segment(
-      data     = outer_df,
-      ggplot2::aes(x=x, y=y, xend=xend, yend=yend),
-      color    = outer_col,
+      data = outer_df,
+      ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+      color = outer_col,
       linewidth = outer_size,
-      lineend  = "round",
-      na.rm    = TRUE
+      lineend = "round",
+      na.rm = TRUE
     ) +
     # c) inner perimeter (if present)
-    { if (!is.null(inner_df))
-      ggplot2::geom_segment(
-        data     = inner_df,
-        ggplot2::aes(x=x, y=y, xend=xend, yend=yend),
-        color    = inner_col,
-        linewidth = inner_size,
-        lineend  = "round",
-        na.rm    = TRUE
-      )
-      else NULL
+    {
+      if (!is.null(inner_df)) {
+        ggplot2::geom_segment(
+          data = inner_df,
+          ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+          color = inner_col,
+          linewidth = inner_size,
+          lineend = "round",
+          na.rm = TRUE
+        )
+      } else {
+        NULL
+      }
     } +
     # d) nodes on top
     ggplot2::geom_point(
       data = nodes_df,
-      ggplot2::aes(x=x, y=y),
+      ggplot2::aes(x = x, y = y),
       color = node_col,
-      size  = node_size,
+      size = node_size,
       na.rm = TRUE
     ) +
     ggplot2::coord_equal() +
@@ -282,15 +299,15 @@ plot_mesh <- function(disag_data,
 #' @export
 plot_prepare_summary <- function(disag_data,
                                  covariate = 1,
-                                 time      = 1) {
+                                 time = 1) {
   # 1) Prepare the three core panels
   p1 <- plot_polygons(disag_data, time = time, show_title = FALSE)
   p2 <- plot_aggregation_raster(disag_data, time = time)
-  p4 <- plot_mesh(disag_data)  # mesh bottom‐left
+  p4 <- plot_mesh(disag_data) # mesh bottom‐left
 
   # 2) Decide if we have a covariate to show
   cov_list <- disag_data$covariate_rasters_list
-  has_cov  <- !is.null(cov_list) &&
+  has_cov <- !is.null(cov_list) &&
     length(cov_list) >= time &&
     inherits(cov_list[[time]], "SpatRaster") &&
     length(names(cov_list[[time]])) > 0
@@ -307,12 +324,13 @@ plot_prepare_summary <- function(disag_data,
     )
   } else {
     # 3 panels only: p1 p2 / p4 [blank]
-    empty <- ggplot2::ggplot() + ggplot2::theme_void()
-    grid  <- cowplot::plot_grid(
+    empty <- ggplot2::ggplot() +
+      ggplot2::theme_void()
+    grid <- cowplot::plot_grid(
       p1, p2,
       p4, empty,
       ncol  = 2,
-      labels = c("A","B","C","")
+      labels = c("A", "B", "C", "")
     )
   }
 
@@ -335,6 +353,7 @@ plot.disag_data_mmap <- function(disag_data,
                                  covariate = 1,
                                  time = 1) {
   plot_prepare_summary(disag_data,
-                       covariate = 1,
-                       time = 1)
+    covariate = 1,
+    time = 1
+  )
 }

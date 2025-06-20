@@ -34,7 +34,7 @@ get_predict_matrices <- function(data, new_data = NULL) {
 
   #-- Compute SPDE projection matrix & coords --
   # coords: data.frame with x,y for each prediction cell.
-  coords  <- data$coords_for_prediction
+  coords <- data$coords_for_prediction
   # A matrix projects from mesh nodes to cells.
   Amatrix <- fmesher::fm_evaluator(data$mesh, loc = as.matrix(coords))$proj$A
 
@@ -62,9 +62,11 @@ get_predict_matrices <- function(data, new_data = NULL) {
 
     # Ensure design & projection dims align
     if (nrow(X_list[[i]]) != nrow(Amatrix)) {
-      stop("Dim mismatch at time ", i,
-           ": nrow(X) = ", nrow(X_list[[i]]),
-           " vs nrow(A) = ", nrow(Amatrix), ".")
+      stop(
+        "Dim mismatch at time ", i,
+        ": nrow(X) = ", nrow(X_list[[i]]),
+        " vs nrow(A) = ", nrow(Amatrix), "."
+      )
     }
   }
 
@@ -95,11 +97,11 @@ get_predict_matrices <- function(data, new_data = NULL) {
 #' @method predict disag_model_mmap_aghq
 #' @export
 predict.disag_model_mmap_aghq <- function(object,
-                                          new_data    = NULL,
+                                          new_data = NULL,
                                           predict_iid = FALSE,
-                                          N           = 1e3,
-                                          CI          = 0.95,
-                                          verbose     = FALSE,
+                                          N = 1e3,
+                                          CI = 0.95,
+                                          verbose = FALSE,
                                           ...) {
   #-- Input validation --
   stopifnot(inherits(object, "disag_model_mmap_aghq"))
@@ -114,67 +116,66 @@ predict.disag_model_mmap_aghq <- function(object,
   start_time <- Sys.time()
 
   #-- Extract design & projection matrices --
-  mats    <- get_predict_matrices(object$data, new_data)
-  X_list  <- mats$X_list      # list of design matrices per time
-  Amatrix <- mats$A           # projection matrix
-  coords  <- mats$coords      # coords for raster building
+  mats <- get_predict_matrices(object$data, new_data)
+  X_list <- mats$X_list # list of design matrices per time
+  Amatrix <- mats$A # projection matrix
+  coords <- mats$coords # coords for raster building
 
   #-- Draw from posterior marginal via AGHQ --
-  samps  <- aghq::sample_marginal(object$aghq_model, N)
-  W      <- samps$samps       # matrix: (n_params × N_draws)
+  samps <- aghq::sample_marginal(object$aghq_model, N)
+  W <- samps$samps # matrix: (n_params × N_draws)
   nd_idx <- which(rownames(W) == "nodemean")
 
-  n_times     <- length(X_list)
+  n_times <- length(X_list)
   layer_names <- paste0("time_", object$data$time_points)
 
   # Prepare lists to collect outputs
-  mean_preds  <- vector("list", n_times)
+  mean_preds <- vector("list", n_times)
   mean_fields <- vector("list", n_times)
-  mean_covs   <- vector("list", n_times)
-  ci_low      <- vector("list", n_times)
-  ci_high     <- vector("list", n_times)
+  mean_covs <- vector("list", n_times)
+  ci_low <- vector("list", n_times)
+  ci_high <- vector("list", n_times)
 
   #-- Setup link function --
-  link_fn <- switch(
-    object$model_setup$link,
+  link_fn <- switch(object$model_setup$link,
     log      = exp,
     identity = identity,
-    logit    = function(x) 1/(1 + exp(-x)),
+    logit    = function(x) 1 / (1 + exp(-x)),
     stop("Unsupported link: ", object$model_setup$link)
   )
 
   #-- Loop over time points --
   for (i in seq_len(n_times)) {
     # 1. Extract design matrix
-    X        <- X_list[[i]]
-    ncov     <- ncol(X) - 1
+    X <- X_list[[i]]
+    ncov <- ncol(X) - 1
     beta_idx <- seq_len(ncov + 1)
 
     # 2. Subset posterior draws for betas & field nodes
-    W_beta   <- W[beta_idx, , drop = FALSE]  # (p × N)
-    field_w  <- W[nd_idx, , drop = FALSE]  # (1 × N)
+    W_beta <- W[beta_idx, , drop = FALSE] # (p × N)
+    field_w <- W[nd_idx, , drop = FALSE] # (1 × N)
 
     # 3. Compute linear predictors
-    lin_cov  <- X %*% W_beta  # (n_cells × N)
-    field_mat<- Amatrix %*% field_w   # (n_cells × N)
-    lin_all  <- lin_cov + field_mat
+    lin_cov <- X %*% W_beta # (n_cells × N)
+    field_mat <- Amatrix %*% field_w # (n_cells × N)
+    lin_all <- lin_cov + field_mat
 
     # 4. Apply link to get lambda draws
-    lam_mat  <- link_fn(lin_all)
+    lam_mat <- link_fn(lin_all)
 
     # 5. Summarize posterior mean
-    mean_vals  <- Matrix::rowMeans(lam_mat)
+    mean_vals <- Matrix::rowMeans(lam_mat)
     field_vals <- Matrix::rowMeans(field_mat)
 
     # 6. Build SpatRasters for mean & components
-    mean_preds[[i]]  <- terra::rast(cbind(coords, y = mean_vals),  type = "xyz")
+    mean_preds[[i]] <- terra::rast(cbind(coords, y = mean_vals), type = "xyz")
     mean_fields[[i]] <- terra::rast(cbind(coords, y = field_vals), type = "xyz")
-    mean_covs[[i]]   <- mean_preds[[i]] - mean_fields[[i]]
+    mean_covs[[i]] <- mean_preds[[i]] - mean_fields[[i]]
 
     # 7. Compute cellwise CIs
-    probs     <- c((1 - CI)/2, 1 - (1 - CI)/2)
-    ci_mat    <- apply(lam_mat, 1, quantile, probs = probs, na.rm = TRUE)
-    ci_low[[i]]  <- terra::rast(cbind(coords, y = ci_mat[1, ]), type = "xyz")
+    probs <- c((1 - CI) / 2, 1 - (1 - CI) / 2)
+    ci_mat <- apply(lam_mat, 1, quantile, probs = probs, na.rm = TRUE)
+    ci_low[[i]] <- terra::rast(cbind(coords, y = ci_mat[1, ]), type = "xyz")
     ci_high[[i]] <- terra::rast(cbind(coords, y = ci_mat[2, ]), type = "xyz")
   }
 
@@ -194,7 +195,7 @@ predict.disag_model_mmap_aghq <- function(object,
   )
 
   uncertainty_prediction <- list(
-    realisations   = NULL,
+    realisations = NULL,
     predictions_ci = list(
       lower = do.call(c, ci_low),
       upper = do.call(c, ci_high)

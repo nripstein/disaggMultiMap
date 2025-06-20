@@ -17,15 +17,15 @@
 #' @return An object of class 'disag_model_mmap_aghq' (a list with '$aghq_model', '$data', and '$model_setup').
 #' @export
 disag_model_mmap_aghq <- function(data,
-                                  priors          = NULL,
-                                  family          = "poisson",
-                                  link            = "log",
-                                  k               = 3,
-                                  field           = TRUE,
-                                  iid             = TRUE,
-                                  silent          = TRUE,
+                                  priors = NULL,
+                                  family = "poisson",
+                                  link = "log",
+                                  k = 3,
+                                  field = TRUE,
+                                  iid = TRUE,
+                                  silent = TRUE,
                                   starting_values = NULL,
-                                  verbose         = FALSE) {
+                                  verbose = FALSE) {
   start_time <- Sys.time()
 
   #-- 1. Input validation --
@@ -59,8 +59,8 @@ disag_model_mmap_aghq <- function(data,
 
   #-- 4. Assemble output --
   out <- list(
-    aghq_model  = aghq_model,
-    data        = data,
+    aghq_model = aghq_model,
+    data = data,
     model_setup = list(
       family = family,
       link   = link,
@@ -96,12 +96,12 @@ disag_model_mmap_aghq <- function(data,
 #' @return A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
 #' @keywords internal
 make_model_object_mmap <- function(data,
-                                   priors          = NULL,
-                                   family          = 'gaussian',
-                                   link            = 'identity',
-                                   field           = TRUE,
-                                   iid             = TRUE,
-                                   silent          = TRUE,
+                                   priors = NULL,
+                                   family = "gaussian",
+                                   link = "identity",
+                                   field = TRUE,
+                                   iid = TRUE,
+                                   silent = TRUE,
                                    starting_values = NULL) {
   #-- 1. Validate data prerequisites --
   if (!inherits(data, "disag_data_mmap")) {
@@ -147,28 +147,28 @@ make_model_object_mmap <- function(data,
   }
 
   #-- 5. Build SPDE operators & projection matrix --
-  nu   <- 1
+  nu <- 1
   spde <- rSPDE::matern.operators(
-    mesh               = data$mesh,
-    alpha              = nu + 1,
+    mesh = data$mesh,
+    alpha = nu + 1,
     compute_higher_order = TRUE
   )$fem_mesh_matrices
   spde[[4]] <- NULL
   names(spde) <- c("M0", "M1", "M2")
 
   Apix <- fmesher::fm_evaluator(data$mesh, loc = data$coords_for_fit)$proj$A
-  n_s  <- nrow(spde$M0)
+  n_s <- nrow(spde$M0)
 
   #-- 6. Prepare covariate matrix --
   if (is.null(data$covariate_rasters_list) ||
-      length(data$covariate_rasters_list[[1]]) == 0) {
+    length(data$covariate_rasters_list[[1]]) == 0) {
     has_covariates <- FALSE
-    cov_matrix     <- matrix(0.0, nrow = nrow(data$covariate_data), ncol = 0)
-    cov_cols       <- character(0)
+    cov_matrix <- matrix(0.0, nrow = nrow(data$covariate_data), ncol = 0)
+    cov_cols <- character(0)
   } else {
     has_covariates <- TRUE
-    cov_cols       <- names(data$covariate_rasters_list[[1]])
-    cov_matrix     <- as.matrix(data$covariate_data[, cov_cols, drop = FALSE])
+    cov_cols <- names(data$covariate_rasters_list[[1]])
+    cov_matrix <- as.matrix(data$covariate_data[, cov_cols, drop = FALSE])
     # ensure numeric
     if (ncol(cov_matrix) > 0) {
       cov_matrix <- apply(cov_matrix, 2, as.numeric)
@@ -176,10 +176,10 @@ make_model_object_mmap <- function(data,
   }
 
   #-- 7. Set up default hyperpriors --
-  bbox      <- sf::st_bbox(data$polygon_shapefile_list[[1]])
-  diag_len  <- sqrt((bbox$xmax - bbox$xmin)^2 + (bbox$ymax - bbox$ymin)^2)
-  prior_rho    <- diag_len / 3
-  prior_sigma  <- sd(data$polygon_data$response / mean(data$polygon_data$response))
+  bbox <- sf::st_bbox(data$polygon_shapefile_list[[1]])
+  diag_len <- sqrt((bbox$xmax - bbox$xmin)^2 + (bbox$ymax - bbox$ymin)^2)
+  prior_rho <- diag_len / 3
+  prior_sigma <- sd(data$polygon_data$response / mean(data$polygon_data$response))
 
   default_priors <- list(
     priormean_intercept     = 0,
@@ -206,11 +206,11 @@ make_model_object_mmap <- function(data,
   }
 
   #-- 8. Flatten start/end index across time --
-  pixel_offset              <- 0L
-  start_end_index_combined  <- NULL
+  pixel_offset <- 0L
+  start_end_index_combined <- NULL
   for (idx in seq_along(data$start_end_index)) {
-    cur   <- data$start_end_index[[idx]]
-    adj   <- cur + pixel_offset
+    cur <- data$start_end_index[[idx]]
+    adj <- cur + pixel_offset
     start_end_index_combined <- rbind(start_end_index_combined, adj)
     pixel_offset <- pixel_offset + (max(cur) + 1L)
   }
@@ -235,19 +235,19 @@ make_model_object_mmap <- function(data,
   # Build data list for TMB
   input_data <- c(
     list(
-      x                    = cov_matrix,
-      aggregation_values   = data$aggregation_pixels,
-      Apixel               = Apix,
-      spde                 = spde,
-      start_end_index      = start_end_index_combined,
-      polygon_response_data= data$polygon_data$response,
+      x = cov_matrix,
+      aggregation_values = data$aggregation_pixels,
+      Apixel = Apix,
+      spde = spde,
+      start_end_index = start_end_index_combined,
+      polygon_response_data = data$polygon_data$response,
       response_sample_size = data$polygon_data$N,
-      time                 = data$polygon_data$time,
-      family               = family_id,
-      link                 = link_id,
-      nu                   = nu,
-      field                = as.integer(field),
-      iid                  = as.integer(iid)
+      time = data$polygon_data$time,
+      family = family_id,
+      link = link_id,
+      nu = nu,
+      field = as.integer(field),
+      iid = as.integer(iid)
     ),
     final_priors
   )
@@ -261,7 +261,7 @@ make_model_object_mmap <- function(data,
       nodemean  = factor(rep(NA, n_s))
     ))
   }
-  if (family_id == 3) {  # NB
+  if (family_id == 3) { # NB
     tmb_map <- c(tmb_map, list(
       iideffect = factor(rep(NA, nrow(data$polygon_data)))
     ))
@@ -272,7 +272,7 @@ make_model_object_mmap <- function(data,
       iideffect         = factor(rep(NA, nrow(data$polygon_data)))
     ))
   }
-  if (family_id != 0) {  # non‐Gaussian
+  if (family_id != 0) { # non‐Gaussian
     tmb_map <- c(tmb_map, list(log_tau_gaussian = factor(NA)))
   }
   if (!has_covariates) {
@@ -282,7 +282,7 @@ make_model_object_mmap <- function(data,
   #-- 11. Identify random effects --
   random_effects <- character(0)
   if (field) random_effects <- c(random_effects, "nodemean")
-  if (iid)   random_effects <- c(random_effects, "iideffect")
+  if (iid) random_effects <- c(random_effects, "iideffect")
 
   #-- 12. Make objective function in TMB--
   obj <- TMB::MakeADFun(
@@ -296,4 +296,3 @@ make_model_object_mmap <- function(data,
 
   return(obj)
 }
-
