@@ -3,6 +3,7 @@
 S3method(plot,disag_data_mmap)
 S3method(predict,disag_model_mmap_aghq)
 S3method(print,disag_data_mmap)
+S3method(print,disag_model_mmap_aghq)
 S3method(summary,disag_data_mmap)
 export(disag_model_mmap_aghq)
 export(plot_aggregation_raster)
