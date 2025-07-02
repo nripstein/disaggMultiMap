@@ -50,7 +50,7 @@ disag_model_mmap_aghq <- function(data,
   )
 
   #-- 3. Run AGHQ --
-  message("Fitting multi‐map disaggregation model via AGHQ (k = ", k, ").")
+  message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,
     k             = k,
