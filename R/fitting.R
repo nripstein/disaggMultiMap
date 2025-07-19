@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Builds the TMB ADFun object for a multi-map disaggregation model, then
-#' runs a higher-order Laplace approximation via AGHQ.
+#' fits the model via AGHQ with desired number of quadrature points.
 #'
 #' @param data A 'disag_data_mmap' object (from 'prepare_data_mmap()').
 #' @param priors Optional named list of prior specifications (see internal helper).
@@ -292,7 +292,7 @@ make_model_object_mmap <- function(data,
   }
   if (family_id == 3) { # NB
     tmb_map <- c(tmb_map, list(
-      iideffect = factor(rep(NA, nrow(data$polygon_data)))
+      iideffect = factor(rep(NA, nrow(data$polygon_data))) # no iid effect for each polygon, but still include iideffect_log_tau
     ))
   }
   if (!iid) {

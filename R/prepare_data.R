@@ -152,6 +152,7 @@ getStartendindex_mmap <- function(covariates, polygon_data) {
 #' @param response_var Character of length 1: name of response column.
 #' @param sample_size_var NULL or character of length 1: sample-size column.
 #' @param make_mesh Logical flag indicating whether to build a mesh.
+#' @param categorical_covariate_baselines passed from prepare_data_mmap
 #'
 #' @return Invisibly 'TRUE' if all checks pass; otherwise stops with an error.
 #' @keywords internal
@@ -162,7 +163,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
                                          response_var,
                                          sample_size_var,
                                          make_mesh,
-                                         categorical_covariate_baselines) {
+                                         categorical_covariate_baselines = NULL) {
   # polygon list
   if (!is.list(polygon_shapefile_list) ||
     length(polygon_shapefile_list) < 1) {
