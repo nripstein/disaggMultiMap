@@ -113,7 +113,6 @@ print.disag_data_mmap <- function(object) {
 #'
 #' @param object
 #'
-#' @returns
 #' @export
 print.disag_model_mmap_aghq <- function(object) {
   cat(summary(object$aghq_model)$summarytable, "\n")

@@ -20,7 +20,7 @@ plot_polygons <- function(disag_data,
   field_name <- disag_data$shapefile_names$response_var
   # Build map
   p <- ggplot2::ggplot(sf_obj) +
-    ggplot2::geom_sf(aes(fill = .data[[field_name]])) +
+    ggplot2::geom_sf(ggplot2::aes(fill = .data[[field_name]])) +
     ggplot2::scale_fill_viridis_c(
       limits = range(sf_obj[[field_name]], na.rm = TRUE)
     ) +
@@ -40,22 +40,50 @@ plot_polygons <- function(disag_data,
 #'
 #' @description
 #' Renders one layer of the covariate raster stack, preserving the raster's CRS,
-#' and coloring by value with a Viridis scale.
+#' and coloring by value with a Viridis scale. Automatically detects and handles
+#' categorical covariates with appropriate discrete color scales.
 #'
 #' @param disag_data A 'disag_data_mmap' object.
 #' @param covariate Integer index or name of the covariate layer.
 #' @param time Integer time-slice (default = 1).
+#' @param max_categories Maximum number of unique values to consider categorical (default = 10).
 #' @return A ggplot2 object.
 #' @export
 plot_covariate_raster <- function(disag_data,
                                   covariate = 1,
-                                  time = 1) {
+                                  time = 1,
+                                  max_categories = 10) {
+  # Validate input object
+  if (!inherits(disag_data, "disag_data_mmap")) {
+    stop("Input must be a 'disag_data_mmap' object")
+  }
+
+  # Validate time parameter
+  if (!is.numeric(time) || length(time) != 1 || time < 1) {
+    stop("'time' must be a positive integer")
+  }
+
   # 1. Pull out the SpatRaster for this time
   cov_list <- disag_data$covariate_rasters_list
-  if (is.null(cov_list) || length(cov_list) < time) {
-    stop("No covariate rasters available for time = ", time)
+
+  # Check if covariates exist at all
+  if (is.null(cov_list)) {
+    stop("No covariate rasters available in this disag_data_mmap object")
   }
+
+  # Check if covariates exist for the requested time
+  if (length(cov_list) < time) {
+    stop("No covariate rasters available for time = ", time,
+         ". Maximum available time is ", length(cov_list))
+  }
+
+  # Get the raster for this time
   rast <- cov_list[[time]]
+  if (!inherits(rast, "SpatRaster")) {
+    stop("Expected a SpatRaster object for time = ", time)
+  }
+
+  # Get layer names
   lyr_names <- names(rast)
   if (is.null(lyr_names) || length(lyr_names) == 0) {
     stop("Covariate raster at time = ", time, " has no layers")
@@ -71,26 +99,84 @@ plot_covariate_raster <- function(disag_data,
     }
     lyr <- covariate
   } else {
+    if (!is.numeric(covariate) || length(covariate) != 1) {
+      stop("'covariate' must be a single integer or character string")
+    }
     if (covariate < 1 || covariate > length(lyr_names)) {
-      stop("Covariate index must be between 1 and ", length(lyr_names))
+      stop("Covariate index must be between 1 and ", length(lyr_names),
+           "; got ", covariate)
     }
     lyr <- lyr_names[covariate]
   }
 
+  # Extract the single layer
   single_layer <- rast[[lyr]]
+
+  # Check if all values are NA
+  if (all(is.na(terra::values(single_layer)))) {
+    warning("Covariate '", lyr, "' contains only NA values")
+  }
+
+  # Check if this is a categorical layer
+  is_categorical <- is_categorical_layer(
+    single_layer,
+    lyr,
+    disag_data$categorical_covariate_baselines,
+    max_categories
+  )
 
   # 3. Convert to data.frame with x,y,value
   df <- terra::as.data.frame(single_layer, xy = TRUE, na.rm = FALSE)
-  # rename the layer’s column to “value”
+  # rename the layer's column to "value"
   names(df)[names(df) == lyr] <- "value"
 
+  # For categorical data, convert to factor with proper levels
+  if (is_categorical) {
+    levels <- get_categorical_levels(single_layer)
+    df$value <- factor(df$value, levels = levels)
+  }
+
   # 4. Plot
-  ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = value)) +
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = value)) +
     ggplot2::geom_raster() +
-    ggplot2::scale_fill_viridis_c(name = lyr) +
     ggplot2::coord_sf(crs = sf::st_crs(disag_data$polygon_shapefile_list[[time]])) +
     ggplot2::labs(x = NULL, y = NULL) +
     ggplot2::theme_minimal()
+
+  # Apply appropriate scale based on whether data is categorical
+  if (is_categorical) {
+    # Use a consistent color palette for categorical variables
+    # We use a custom palette that's more distinct than viridis for categories
+    cat_colors <- c(
+      "#440154", # dark purple
+      "#21918c", # teal
+      "#fde725", # yellow
+      "#35b779", # green
+      "#31688e", # blue
+      "#443983", # indigo
+      "#90d743", # lime
+      "#e35932", # orange
+      "#d8576b"  # pink
+    )
+
+    # If there are more categories than colors, recycle the colors
+    n_levels <- length(levels(df$value))
+    if (n_levels > length(cat_colors)) {
+      cat_colors <- rep_len(cat_colors, n_levels)
+    } else {
+      cat_colors <- cat_colors[1:n_levels]
+    }
+
+    p <- p + ggplot2::scale_fill_manual(
+      name = lyr,
+      values = cat_colors,
+      na.value = "transparent"
+    )
+  } else {
+    p <- p + ggplot2::scale_fill_viridis_c(name = lyr, na.value = "transparent")
+  }
+
+  return(p)
 }
 
 
@@ -294,12 +380,19 @@ plot_mesh <- function(disag_data,
 #' @param disag_data A `disag_data_mmap` object.
 #' @param covariate Integer or name of the covariate to display (default = 1).
 #' @param time Integer time‐slice (default = 1).
+#' @param max_categories Maximum number of unique values to consider categorical (default = 10).
 #' @return A ggdraw object (from cowplot) which can be printed.
 #' @method plot disag_data_mmap
 #' @export
 plot_prepare_summary <- function(disag_data,
                                  covariate = 1,
-                                 time = 1) {
+                                 time = 1,
+                                 max_categories = 10) {
+  # Validate input
+  if (!inherits(disag_data, "disag_data_mmap")) {
+    stop("Input must be a 'disag_data_mmap' object")
+  }
+
   # 1) Prepare the three core panels
   p1 <- plot_polygons(disag_data, time = time, show_title = FALSE)
   p2 <- plot_aggregation_raster(disag_data, time = time)
@@ -312,29 +405,82 @@ plot_prepare_summary <- function(disag_data,
     inherits(cov_list[[time]], "SpatRaster") &&
     length(names(cov_list[[time]])) > 0
 
+  # Set panel labels
+  panel_labels <- c("Response", "Offset", "INLA Mesh", "Covariates")
+
+
   if (has_cov) {
-    # build the covariate panel
-    p3 <- plot_covariate_raster(disag_data, covariate = covariate, time = time)
-    # 2×2: p1 p2 / p4 p3
-    grid <- cowplot::plot_grid(
-      p1, p2,
-      p4, p3,
-      ncol  = 2,
-      labels = "AUTO"
-    )
+    # Try to build the covariate panel
+    tryCatch({
+      p3 <- plot_covariate_raster(disag_data, covariate = covariate, time = time,
+                                 max_categories = max_categories)
+
+      # For categorical covariates, adjust the legend to be more compact
+      if (is.factor(p3$data$value)) {
+        p3 <- p3 +
+          ggplot2::theme(
+            legend.key.size = ggplot2::unit(0.8, "lines"),
+            legend.text = ggplot2::element_text(size = 8),
+            legend.title = ggplot2::element_text(size = 9),
+            legend.margin = ggplot2::margin(0, 0, 0, 0),
+            legend.box.margin = ggplot2::margin(-10, 0, 0, 0)
+          )
+      }
+
+      # 2×2: p1 p2 / p4 p3
+      grid <- cowplot::plot_grid(
+        p1, p2,
+        p4, p3,
+        ncol  = 2,
+        labels = panel_labels
+      )
+      # Convert to ggdraw object
+      grid <- cowplot::ggdraw(grid)
+    }, error = function(e) {
+      # If there's an error plotting the covariate, show a message instead
+      message("Could not plot covariate: ", e$message)
+      empty <- ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 0.5, y = 0.5,
+                         label = paste("No covariate available:", e$message),
+                         size = 3) +
+        ggplot2::theme_void() +
+        ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1)
+
+      grid <- cowplot::plot_grid(
+        p1, p2,
+        p4, empty,
+        ncol  = 2,
+        labels = panel_labels
+      )
+      # Convert to ggdraw object
+      grid <- cowplot::ggdraw(grid)
+    })
   } else {
-    # 3 panels only: p1 p2 / p4 [blank]
+    # Create an informative empty panel
+    if (is.null(cov_list)) {
+      msg <- "No covariates in this dataset"
+    } else if (length(cov_list) < time) {
+      msg <- paste("No covariates for time =", time)
+    } else {
+      msg <- "No covariate layers found"
+    }
+
     empty <- ggplot2::ggplot() +
-      ggplot2::theme_void()
+      ggplot2::annotate("text", x = 0.5, y = 0.5, label = msg, size = 3) +
+      ggplot2::theme_void() +
+      ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1)
+
     grid <- cowplot::plot_grid(
       p1, p2,
       p4, empty,
       ncol  = 2,
-      labels = c("A", "B", "C", "")
+      labels = panel_labels
     )
+    # Convert to ggdraw object
+    grid <- cowplot::ggdraw(grid)
   }
 
-  grid
+  return(grid)
 }
 
 
@@ -344,16 +490,24 @@ plot_prepare_summary <- function(disag_data,
 #' Combines polygons, aggregation raster, mesh, and (if present) a covariate
 #' into a 2×2 grid.
 #'
-#' @param disag_data A `disag_data_mmap` object.
+#' @param x A `disag_data_mmap` object.
+#' @param y Not used (required for S3 method compatibility).
 #' @param covariate Integer or name of the covariate to display (default = 1).
 #' @param time Integer time‐slice (default = 1).
+#' @param max_categories Maximum number of unique values to consider categorical (default = 10).
+#' @param ... Additional arguments passed to plot_prepare_summary.
 #' @return A ggdraw object (from cowplot) which can be printed.
 #' @export
-plot.disag_data_mmap <- function(disag_data,
+plot.disag_data_mmap <- function(x,
+                                 y = NULL,
+                                 ...,
                                  covariate = 1,
-                                 time = 1) {
-  plot_prepare_summary(disag_data,
-    covariate = 1,
-    time = 1
+                                 time = 1,
+                                 max_categories = 10) {
+  plot_prepare_summary(x,
+    covariate = covariate,
+    time = time,
+    max_categories = max_categories,
+    ...
   )
 }

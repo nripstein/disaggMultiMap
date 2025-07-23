@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Builds the TMB ADFun object for a multi-map disaggregation model, then
-#' runs a higher-order Laplace approximation via AGHQ.
+#' fits the model via AGHQ with desired number of quadrature points.
 #'
 #' @param data A 'disag_data_mmap' object (from 'prepare_data_mmap()').
 #' @param priors Optional named list of prior specifications (see internal helper).
@@ -45,11 +45,12 @@ disag_model_mmap_aghq <- function(data,
     field           = field,
     iid             = iid,
     silent          = silent,
-    starting_values = starting_values
+    starting_values = starting_values,
+    verbose         = verbose
   )
 
   #-- 3. Run AGHQ --
-  message("Fitting multi‐map disaggregation model via AGHQ (k = ", k, ").")
+  message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,
     k             = k,
@@ -70,7 +71,7 @@ disag_model_mmap_aghq <- function(data,
   )
   class(out) <- c("disag_model_mmap_aghq", "list")
 
-  #-- 5. Optional runtime message --
+  #-- 5. Runtime message --
   if (verbose) {
     elapsed <- difftime(Sys.time(), start_time, units = "mins")
     message(sprintf("disag_model_mmap_aghq() runtime: %.2f minutes", as.numeric(elapsed)))
@@ -102,7 +103,8 @@ make_model_object_mmap <- function(data,
                                    field = TRUE,
                                    iid = TRUE,
                                    silent = TRUE,
-                                   starting_values = NULL) {
+                                   starting_values = NULL,
+                                   verbose = FALSE) {
   #-- 1. Validate data prerequisites --
   if (!inherits(data, "disag_data_mmap")) {
     stop("Internal error: `data` must be 'disag_data_mmap'.")
@@ -160,18 +162,42 @@ make_model_object_mmap <- function(data,
   n_s <- nrow(spde$M0)
 
   #-- 6. Prepare covariate matrix --
-  if (is.null(data$covariate_rasters_list) ||
-    length(data$covariate_rasters_list[[1]]) == 0) {
+  # Select covariate columns after preprocessing, including any one-hot dummies:
+  reserved <- c("ID", "cell", "poly_local_id", "time")
+  cov_cols <- setdiff(names(data$covariate_data), reserved)
+  if (length(cov_cols) == 0) {
     has_covariates <- FALSE
     cov_matrix <- matrix(0.0, nrow = nrow(data$covariate_data), ncol = 0)
-    cov_cols <- character(0)
   } else {
     has_covariates <- TRUE
-    cov_cols <- names(data$covariate_rasters_list[[1]])
     cov_matrix <- as.matrix(data$covariate_data[, cov_cols, drop = FALSE])
     # ensure numeric
-    if (ncol(cov_matrix) > 0) {
-      cov_matrix <- apply(cov_matrix, 2, as.numeric)
+    cov_matrix <- apply(cov_matrix, 2, as.numeric)
+    colnames(cov_matrix) <- cov_cols
+  }
+
+
+  if (verbose) {
+    total_polys <- length(unique(data$covariate_data$poly_local_id))
+    for (col in cov_cols) {
+      v <- tapply(
+        data$covariate_data[[col]],
+        data$covariate_data$poly_local_id,
+        var,
+        na.rm = TRUE
+      )
+      zero_var_pols <- names(v)[!is.finite(v) | v == 0]
+      n_zero <- length(zero_var_pols)
+      if (n_zero > 0) {
+        msg_list <- paste(zero_var_pols, collapse = ", ")
+        if (n_zero > 10) {
+          msg_list <- paste0(paste(head(zero_var_pols, 10), collapse = ", "), ", ...")
+        }
+        message(sprintf(
+          "Covariate '%s' has zero variance in %d/%d polygons (%s). Poisson models may be unidentifiable.",
+          col, n_zero, total_polys, msg_list
+        ))
+      }
     }
   }
 
@@ -217,7 +243,7 @@ make_model_object_mmap <- function(data,
 
   #-- 9. Build parameter list & map for TMB --
   default_parameters <- list(
-    intercept         = -5,
+    intercept         = 0,
     slope             = rep(0, ncol(cov_matrix)),
     log_tau_gaussian  = 8,
     iideffect         = rep(0, nrow(data$polygon_data)),
@@ -231,6 +257,9 @@ make_model_object_mmap <- function(data,
   } else {
     modifyList(default_parameters, starting_values)
   }
+
+  # rename covariates
+  names(default_parameters$slope) <- cov_cols
 
   # Build data list for TMB
   input_data <- c(
@@ -263,7 +292,7 @@ make_model_object_mmap <- function(data,
   }
   if (family_id == 3) { # NB
     tmb_map <- c(tmb_map, list(
-      iideffect = factor(rep(NA, nrow(data$polygon_data)))
+      iideffect = factor(rep(NA, nrow(data$polygon_data))) # no iid effect for each polygon, but still include iideffect_log_tau
     ))
   }
   if (!iid) {

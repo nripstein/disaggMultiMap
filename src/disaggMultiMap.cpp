@@ -236,37 +236,185 @@ Type objective_function<Type>::operator()()
       nll -= dpois(polygon_response_data[polygon], pred_polygoncases, true);
       reportnll[polygon] = -dpois(polygon_response_data[polygon], pred_polygoncases, true);
     } else if(family == 3) {
+      // Type tau_nb = exp(iideffect_log_tau);
+
+      // // tau_nb prior Gamma(a=1,b=2):
+      // Type a = Type(1.0);
+      // Type b = Type(2.0);
+      // // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in τ‐space)
+      // nll -= dgamma(tau_nb, a, b, true);
+      // // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
+      // nll -= log(tau_nb);
+
+      // // NB‐likelihood:
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i  = pred_polygoncases;
+
+
+      // Type r = Type(1.0)/tau_nb;          
+      // Type p = 1/(1+tau_nb*mu_i);
+
+
+      // nll -= dnbinom(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
+
+      //// HERE OG
+      // // ---- 2. compute tau_nb & sigma_nb ----
+      // Type tau_nb   = exp(iideffect_log_tau);
+      // Type sigma_nb = Type(1.0)/sqrt(tau_nb);
+
+      // // ---- 3. PC‐prior on sigma_nb ----
+      // Type lambda_nb = -log(prior_iideffect_sd_prob)/prior_iideffect_sd_max;
+
+      // Type log_pcd_nb
+      //   = log(lambda_nb/2.0)
+      //   - (3.0/2.0)*iideffect_log_tau
+      //   - lambda_nb * pow(tau_nb, -0.5);
+      // nll -= log_pcd_nb + iideffect_log_tau;  // the extra +log‐Jacobian
+
+      // // ---- 4. NB likelihood ----
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i = pred_polygoncases;
+
+      // // parametrization: r = 1/tau_nb, p = r/(r+μ)
+      // Type r = Type(1.0)/tau_nb;
+      // Type p = r/(r + mu_i);
+      // nll -= dnbinom(y_i, r, p, true);
+
+
+      //////HERE PROBS BETTER
+      // — transform to τ and its sqrt (distance) d = √τ
+      // Type eta     = iideffect_log_tau;
+      // Type tau_nb  = exp(eta);
+      // Type d       = exp(eta/Type(2.0));  // sqrt(tau_nb)
+
+      // //— PC‐prior on η:  log p(η) = log(λ/2) + (1/2)·η – λ·d
+      // Type lambda  = -log(prior_iideffect_sd_prob)/prior_iideffect_sd_max; 
+      // nll -= log(lambda/Type(2.0)) 
+      //      + Type(0.5)*eta 
+      //      - lambda*d;
+
+      // //— now the Negative‐Binomial likelihood
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i = pred_polygoncases;
+      // Type r    = Type(1.0) / tau_nb;               // NB size
+      // Type p    = r / (r + mu_i);                   // NB prob
+      // nll      -= dnbinom2(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom2(y_i, r, p, true);
+
+
+
+      ///// TAU^2 version cht
+      //— transform
+      // Type eta    = iideffect_log_tau;
+      // Type tau_nb = exp(eta);
+
+      // //— PC‐prior for shape/rate=1/τ^2:
+      // //  −log p(η) = −logλ − η + λ·τ
+      // Type lambda = -log(prior_iideffect_sd_prob)/prior_iideffect_sd_max; 
+      // nll +=   lambda * tau_nb;    // +λ·τ
+      // nll     -=  log(lambda);         // −logλ
+      // nll     -=  eta;                // −η
+
+      // //— then your NB‐likelihood as before
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i = pred_polygoncases;
+      // Type r    = Type(1.0) / tau_nb;
+      // Type p    = r / (r + mu_i);
+      // nll    -= dnbinom2(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom2(y_i, r, p, true);
+
+      // JUL 2 ONE
+      // Type tau_nb = exp(iideffect_log_tau);
+
+      // // tau_nb prior Gamma(a=1,b=2):
+      // Type a = Type(1.0);
+      // Type b = Type(2.0);
+      // // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in τ‐space)
+      // nll -= dgamma(tau_nb, a, b, true);
+      // // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
+      // nll -= log(tau_nb);
+
+      // // NB‐likelihood:
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i  = pred_polygoncases;
+
+
+      // // Type r = Type(1.0)/(tau_nb*tau_nb);          
+      // // Type p = 1/(1+tau_nb*tau_nb*mu_i); 
+      // Type r = Type(1.0)/(tau_nb);  
+      // Type p = 1/(1+tau_nb*mu_i); 
+
+
+      // nll -= dnbinom(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
+
+      // JUL 2 TWO
+      // ——— Negative‐Binomial family with PC prior on dispersion ———
+      //// α ≡ τ_nb = exp(iideffect_log_tau)
+      // Type alpha   = exp(iideffect_log_tau);
+      // // Type alpha   = exp(iideffect_log_tau) * exp(iideffect_log_tau);
+
+      // // reuse prior_iideffect_sd_max / prior_iideffect_sd_prob:
+      // // Pr(√α > sd_max) = sd_prob  ⇒  λ = −ln(sd_prob)/sd_max
+      // Type lambda  = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
+      // // approximate distance d = √α
+      // Type d       = sqrt(alpha);
+      // // PC prior on η = log(α):   π(η) = lambda·e^(−λ d)·(0.5 d)
+      // // log π(η) = log(λ/2) + 0.5·η − λ·d
+      // // Type log_prior_eta = log(lambda / Type(2.0)) + Type(0.5) * iideffect_log_tau - lambda * d;
+      // Type log_prior_eta = log(lambda) - log(alpha) - lambda * d; // MINE
+      // nll -= log_prior_eta;
+
+      // // ——— Negative‐Binomial likelihood ———
+      // Type y_i = polygon_response_data[polygon];
+      // Type mu_i = pred_polygoncases;
+      // // parameterization:  r = 1/alpha,  p = 1 / (1 + alpha*mu)
+      // Type r = Type(1.0) / alpha;
+      // Type p = Type(1.0) / (Type(1.0) + alpha * mu_i);
+      // nll -= dnbinom(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
+
+      // Jul 9
+      // ——— PC prior on NB dispersion τ_nb = α via η = log(τ_nb) ———
+      // Tail condition: P(d > prior_iideffect_sd_max) = prior_iideffect_sd_prob
+      // with d(α)=√α => d = exp(η/2) and λ = -log(p_tail)/d_max
+
+      
+      Type lambda = -log(prior_iideffect_sd_prob)
+                  / prior_iideffect_sd_max;
+      // log π(η) = log(λ/2) + 0.5·η − λ·exp(η/2)
+      Type log_pcdensity_nb =
+          log(lambda / Type(2.0))
+        + Type(0.5) * iideffect_log_tau
+        - lambda * exp(iideffect_log_tau * Type(0.5));
+      nll -= log_pcdensity_nb;
+      // Rcout << "PC-prior at eta=" << iideffect_log_tau
+      // << ": log_pcd="   << log_pcdensity_nb << "\n";
+
+
+      // ——— Negative‐Binomial likelihood ———
       Type tau_nb = exp(iideffect_log_tau);
+      Type r      = Type(1.0) / tau_nb;
+      Type p      = Type(1.0) / (Type(1.0) + tau_nb * pred_polygoncases);
 
-      // tau_nb prior Gamma(a=1,b=0.5):
-      Type a = Type(1.0);
-      Type b = Type(2.0);
-      // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in τ‐space)
-      nll -= dgamma(tau_nb, a, b, true);
-      // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
-      nll -= log(tau_nb);
+      // y_i ~ NB(r, p)
+      nll -= dnbinom(polygon_response_data[polygon],
+                     r, p,
+                     true);
+      reportnll[polygon] = 
+          -dnbinom(polygon_response_data[polygon],
+                   r, p,
+                   true);
 
-      // NB‐likelihood:
-      Type y_i  = polygon_response_data[polygon];
-      Type mu_i  = pred_polygoncases;
-
-
-      Type r = Type(1.0)/tau_nb;          
-      Type p = 1/(1+tau_nb*mu_i); //TEMP ATTEMPT. ABOVE WAS WORKING BEFORE
-
-
-      nll -= dnbinom(y_i, r, p, true);
-      reportnll[polygon] = -dnbinom(y_i, r, p, true);
-
-      // nll -= dnbinom2(y_i, mu_i, tau_nb, true);
-      // reportnll[polygon] = -dnbinom2(y_i, mu_i, tau_nb, true);
-
+  
       
     } else {
       Rf_error("Likelihood not implemented.");
     }
   }
-  
+
+
   // ------------------------------------------------------------------------ //
   // Reporting
   // ------------------------------------------------------------------------ //

@@ -8,6 +8,7 @@
 #' @param aggregation_rasters_list Optional list of 'SpatRaster'; if NULL, uses uniform counts.
 #' @param id_var Name of the polygon ID column in each 'sf'.
 #' @param response_var Name of the response column.
+#' @param categorical_covariate_baselines Named list; names are raster layers to treat as categorical, values are baseline level to drop.
 #' @param sample_size_var Name of the sample-size column (for binomial models); may be NULL.
 #' @param mesh_args Passed to 'build_mesh()'.
 #' @param na_action Logical; if TRUE, drop or impute NAs instead of stopping.
@@ -21,6 +22,7 @@ prepare_data_mmap <- function(polygon_shapefile_list,
                               aggregation_rasters_list = NULL,
                               id_var = "area_id",
                               response_var = "response",
+                              categorical_covariate_baselines = NULL,
                               sample_size_var = NULL,
                               mesh_args = NULL,
                               na_action = FALSE,
@@ -36,7 +38,8 @@ prepare_data_mmap <- function(polygon_shapefile_list,
     id_var,
     response_var,
     sample_size_var,
-    make_mesh
+    make_mesh,
+    categorical_covariate_baselines
   )
 
   n_times <- length(polygon_shapefile_list)
@@ -53,7 +56,8 @@ prepare_data_mmap <- function(polygon_shapefile_list,
         id_var          = id_var,
         response_var    = response_var,
         sample_size_var = sample_size_var,
-        na_action       = na_action
+        na_action       = na_action,
+        categorical_covariate_baselines = categorical_covariate_baselines
       )
     }
   )
@@ -71,7 +75,7 @@ prepare_data_mmap <- function(polygon_shapefile_list,
   covariate_data_combined <- do.call(rbind, covariate_data_list)
   aggregation_pixels_combined <- unlist(aggregation_pixels_list)
   coords_for_fit_combined <- do.call(rbind, coords_for_fit_list)
-  # For prediction, here we use the coordinates from the first time point
+  # For prediction, we use the coordinates from the first time point
   coords_for_prediction_combined <- coords_for_prediction_list[[1]]
 
   # Build a single mesh using the union of all polygon geometries (assumes same CRS)
@@ -148,6 +152,7 @@ getStartendindex_mmap <- function(covariates, polygon_data) {
 #' @param response_var Character of length 1: name of response column.
 #' @param sample_size_var NULL or character of length 1: sample-size column.
 #' @param make_mesh Logical flag indicating whether to build a mesh.
+#' @param categorical_covariate_baselines passed from prepare_data_mmap
 #'
 #' @return Invisibly 'TRUE' if all checks pass; otherwise stops with an error.
 #' @keywords internal
@@ -157,7 +162,8 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
                                          id_var,
                                          response_var,
                                          sample_size_var,
-                                         make_mesh) {
+                                         make_mesh,
+                                         categorical_covariate_baselines = NULL) {
   # polygon list
   if (!is.list(polygon_shapefile_list) ||
     length(polygon_shapefile_list) < 1) {
@@ -208,6 +214,17 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
     stop("`make_mesh` must be a single logical value (TRUE or FALSE).")
   }
 
+  # categorical_baselines must be NULL or named list of character
+  if (!is.null(categorical_covariate_baselines)) {
+    if (!is.list(categorical_covariate_baselines) || is.null(names(categorical_covariate_baselines))) {
+      stop("'categorical_covariate_baselines' must be a named list of baseline values such as 'list(landuse = 'urban', soil_type = 'clay')'.")
+    }
+    # ensure each name matches a covariate layer
+    cov_names <- if (is.null(covariate_rasters_list)) character(0) else names(covariate_rasters_list[[1]])
+    bad <- setdiff(names(categorical_covariate_baselines), cov_names)
+    if (length(bad)) stop("Unknown categorical layers: ", paste(bad, collapse=", "))
+  }
+
   return(invisible(TRUE))
 }
 
@@ -240,7 +257,6 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
 #'   - 'coords_pred': coords for full-extent prediction.
 #'   - 'start_end_index': integer matrix of 0-indexed start/end for each polygon.
 #' @keywords internal
-
 prepare_time_point <- function(t,
                                poly_sf,
                                cov_rasters,
@@ -248,7 +264,8 @@ prepare_time_point <- function(t,
                                id_var,
                                response_var,
                                sample_size_var,
-                               na_action) {
+                               na_action,
+                               categorical_covariate_baselines) {
   #-- 1. Validate inputs --
   if (!inherits(poly_sf, "sf")) {
     stop("Time ", t, ": `polygon_shapefile_list[[t]]` must be an sf object.")
@@ -351,6 +368,44 @@ prepare_time_point <- function(t,
       } else {
         stop("Time ", t, ": found NAs in covariates; set na_action = TRUE to impute.")
       }
+    }
+  }
+
+  # 4g) Encode categorical rasters (one-hot, drop baseline)
+  if (!is.null(cov_rasters) && length(categorical_covariate_baselines) > 0) {
+    for (lay in intersect(names(cov_rasters), names(categorical_covariate_baselines))) {
+      vals <- cov_data[[lay]]
+      # derive levels via terra; fallback to unique raster values
+      lvl_list <- terra::levels(cov_rasters[[lay]])
+      if (!is.null(lvl_list) && nrow(lvl_list[[1]]) > 0) {
+        df <- lvl_list[[1]]
+        # assume first column is ID, second column is category label
+        if (ncol(df) >= 2) {
+          lvl_tab <- as.character(df[[2]])
+        } else {
+          lvl_tab <- as.character(df[[1]])
+        }
+      } else {
+        lvl_tab <- sort(unique(terra::values(cov_rasters[[lay]])))
+      }
+      f <- factor(vals, levels = lvl_tab)
+      # validate baseline exists
+      bl <- categorical_covariate_baselines[[lay]]
+      if (!bl %in% lvl_tab) {
+        stop(sprintf("Layer '%s': specified baseline '%s' not found among levels: %s",
+                     lay, bl, paste(lvl_tab, collapse=", ")))
+      }
+      # set baseline
+      f <- relevel(f, ref = bl)
+      # treatment contrasts: intercept + (k-1) dummies
+      X <- model.matrix(~ f)
+      # drop intercept column
+      dm <- X[, -1, drop = FALSE]
+
+      colnames(dm) <- sub("^f", paste0(lay, "_"), colnames(dm))
+      # bind into cov_data and remove original
+      cov_data <- cbind(cov_data, dm)
+      cov_data[[lay]] <- NULL
     }
   }
 
