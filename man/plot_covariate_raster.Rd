@@ -4,7 +4,7 @@
 \alias{plot_covariate_raster}
 \title{Plot a single covariate raster}
 \usage{
-plot_covariate_raster(disag_data, covariate = 1, time = 1)
+plot_covariate_raster(disag_data, covariate = 1, time = 1, max_categories = 10)
 }
 \arguments{
 \item{disag_data}{A 'disag_data_mmap' object.}
@@ -12,11 +12,14 @@ plot_covariate_raster(disag_data, covariate = 1, time = 1)
 \item{covariate}{Integer index or name of the covariate layer.}
 
 \item{time}{Integer time-slice (default = 1).}
+
+\item{max_categories}{Maximum number of unique values to consider categorical (default = 10).}
 }
 \value{
 A ggplot2 object.
 }
 \description{
 Renders one layer of the covariate raster stack, preserving the raster's CRS,
-and coloring by value with a Viridis scale.
+and coloring by value with a Viridis scale. Automatically detects and handles
+categorical covariates with appropriate discrete color scales.
 }

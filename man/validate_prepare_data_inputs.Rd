@@ -11,7 +11,8 @@ validate_prepare_data_inputs(
   id_var,
   response_var,
   sample_size_var,
-  make_mesh
+  make_mesh,
+  categorical_covariate_baselines = NULL
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ validate_prepare_data_inputs(
 \item{sample_size_var}{NULL or character of length 1: sample-size column.}
 
 \item{make_mesh}{Logical flag indicating whether to build a mesh.}
+
+\item{categorical_covariate_baselines}{passed from prepare_data_mmap}
 }
 \value{
 Invisibly 'TRUE' if all checks pass; otherwise stops with an error.

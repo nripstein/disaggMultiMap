@@ -4,14 +4,20 @@
 \alias{plot.disag_data_mmap}
 \title{Visual summary plot of prepared data}
 \usage{
-\method{plot}{disag_data_mmap}(disag_data, covariate = 1, time = 1)
+\method{plot}{disag_data_mmap}(x, y = NULL, ..., covariate = 1, time = 1, max_categories = 10)
 }
 \arguments{
-\item{disag_data}{A `disag_data_mmap` object.}
+\item{x}{A `disag_data_mmap` object.}
+
+\item{y}{Not used (required for S3 method compatibility).}
+
+\item{...}{Additional arguments passed to plot_prepare_summary.}
 
 \item{covariate}{Integer or name of the covariate to display (default = 1).}
 
 \item{time}{Integer time‐slice (default = 1).}
+
+\item{max_categories}{Maximum number of unique values to consider categorical (default = 10).}
 }
 \value{
 A ggdraw object (from cowplot) which can be printed.

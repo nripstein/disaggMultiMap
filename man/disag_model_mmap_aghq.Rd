@@ -43,5 +43,5 @@ An object of class 'disag_model_mmap_aghq' (a list with '$aghq_model', '$data', 
 }
 \description{
 Builds the TMB ADFun object for a multi-map disaggregation model, then
-runs a higher-order Laplace approximation via AGHQ.
+fits the model via AGHQ with desired number of quadrature points.
 }
