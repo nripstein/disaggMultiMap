@@ -99,7 +99,7 @@ print.disag_data_mmap <- function(object) {
   n_pixels <- nrow(object$covariate_data)
 
   cat("Disaggregation data (multi‐map) info\n")
-  cat("====================================\n")
+  cat("=====================================\n")
   cat(sprintf("Time points: %d\n", n_times))
   cat(sprintf("Total polygons: %d\n", n_polygons))
   cat(sprintf("Total pixels: %d\n\n", n_pixels))
@@ -109,12 +109,241 @@ print.disag_data_mmap <- function(object) {
 }
 
 
-#' Summarize model fit for multi-map disaggregation model fit with AGHQ using AGHQ's builtin summary
+#' Print method for 'disag_model_mmap_aghq' objects
 #'
-#' @param object
+#' @description
+#' Displays a brief overview of a multi-map disaggregation model:
+#' model family, link function, and components included.
 #'
+#' @param x A 'disag_model_mmap_aghq' object.
+#' @param ... Additional arguments (not used).
+#'
+#' @return Invisibly returns the original 'disag_model_mmap_aghq' object.
+#' @method print disag_model_mmap_aghq
 #' @export
-print.disag_model_mmap_aghq <- function(object) {
-  cat(summary(object$aghq_model)$summarytable, "\n")
-  return(invisible(object))
+print.disag_model_mmap_aghq <- function(x, ..., max_print = 30) {
+  # Check if x is a valid disag_model_mmap_aghq object
+  if (!inherits(x, "disag_model_mmap_aghq")) {
+    stop("Object must be of class 'disag_model_mmap_aghq'")
+  }
+
+  # Extract model setup information with error handling
+  model_info <- tryCatch({
+    list(
+      family = x$model_setup$family,
+      link = x$model_setup$link,
+      field = x$model_setup$field,
+      iid = x$model_setup$iid
+    )
+  }, error = function(e) {
+    warning("Could not extract model setup information: ", e$message)
+    list(
+      family = "unknown",
+      link = "unknown",
+      field = NA,
+      iid = NA
+    )
+  })
+
+  # Print header and basic model information
+  cat("Disaggregation model (multi-map) fit with AGHQ\n")
+  cat("==============================================\n")
+  cat(sprintf("Family: %s\n", model_info$family))
+  cat(sprintf("Link function: %s\n", model_info$link))
+
+  # Handle potential NA values in field and iid
+  if (is.na(model_info$field)) {
+    cat("Spatial field included: Unknown\n")
+  } else {
+    cat(sprintf("Spatial field included: %s\n", ifelse(model_info$field, "Yes", "No")))
+  }
+
+  if (is.na(model_info$iid)) {
+    cat("IID effects included: Unknown\n")
+  } else {
+    cat(sprintf("IID effects included: %s\n", ifelse(model_info$iid, "Yes", "No")))
+  }
+
+  # Extract fixed effects information with robust error handling
+  fixed_effects <- tryCatch({
+    # Check if aghq_model exists
+    if (is.null(x$aghq_model)) {
+      warning("aghq_model component is NULL")
+      return(character(0))
+    }
+
+    # Check if mode exists
+    if (is.null(x$aghq_model$mode)) {
+      warning("aghq_model$mode component is NULL")
+      return(character(0))
+    }
+
+    # Get parameter names from the mode vector
+    mode <- x$aghq_model$mode
+    # Filter out random effects (nodemean and iideffect)
+    fixed_names <- names(mode)[!grepl("^nodemean|^iideffect", names(mode))]
+    fixed_names
+  }, error = function(e) {
+    warning("Error extracting fixed effects: ", e$message)
+    character(0)  # Return empty vector if there's an error
+  })
+
+  cat(sprintf("Quadrature Points: %s\n", x$aghq_model$normalized_posterior$grid$level[[1]]))
+
+  # Print fixed effects information
+  if (length(fixed_effects) > 0) {
+    cat(sprintf("\nFixed effects parameters: %d\n", length(fixed_effects)))
+    cat("Parameter names: ", paste(fixed_effects, collapse = ", "), "\n")
+  } else {
+    cat("\nNo fixed effects parameters found.\n")
+  }
+
+  # Extract random effects information with robust error handling
+  random_effects <- tryCatch({
+    # Check if aghq_model exists
+    if (is.null(x$aghq_model)) {
+      warning("aghq_model component is NULL")
+      return(character(0))
+    }
+
+    # Check if mode exists
+    if (is.null(x$aghq_model$mode)) {
+      warning("aghq_model$mode component is NULL")
+      return(character(0))
+    }
+
+    # Get parameter names from the mode vector
+    mode <- x$aghq_model$mode
+    # Filter for random effects (nodemean and iideffect)
+    random_names <- names(mode)[grepl("^nodemean|^iideffect", names(mode))]
+    random_names
+  }, error = function(e) {
+    warning("Error extracting random effects: ", e$message)
+    character(0)  # Return empty vector if there's an error
+  })
+
+  # Print random effects information
+  n_random <- length(random_effects)
+  if (n_random > 0) {
+    cat(sprintf("\nRandom effects: %d\n", n_random))
+
+    # Count by type with error handling
+    n_nodemean <- sum(grepl("^nodemean", random_effects))
+    n_iideffect <- sum(grepl("^iideffect", random_effects))
+
+    if (n_nodemean > 0) {
+      cat(sprintf("  Spatial field nodes: %d\n", n_nodemean))
+    }
+
+    if (n_iideffect > 0) {
+      cat(sprintf("  IID effects: %d\n", n_iideffect))
+    }
+
+    # Print warning if too many random effects to display
+    if (n_random > max_print) {
+      cat(sprintf("\nThere are %d random effects, but max_print = %d, so not showing details.\n",
+                  n_random, max_print))
+      cat(sprintf("Set max_print higher than %d if you would like to see random effects details.\n",
+                  n_random))
+    }
+  } else {
+    cat("\nNo random effects found.\n")
+  }
+
+  # Add message directing to summary
+  cat("\nUse `summary(...)` for more detailed information about the model fit.\n")
+
+  return(invisible(x))
+}
+
+
+#' Summary method for 'disag_model_mmap_aghq' objects (direct approach)
+#'
+#' @description
+#' Creates a simplified summary of a multi-map disaggregation model fit with AGHQ,
+#' directly using the AGHQ model's summary information.
+#'
+#' @param object A 'disag_model_mmap_aghq' object.
+#' @param ... Additional arguments (not used).
+#'
+#' @return An object of class 'summary.disag_model_mmap_aghq' containing the summary information.
+#' @method summary disag_model_mmap_aghq
+#' @export
+summary.disag_model_mmap_aghq <- function(object, ...) {
+  # Check if object is a valid disag_model_mmap_aghq object
+  if (!inherits(object, "disag_model_mmap_aghq")) {
+    stop("Object must be of class 'disag_model_mmap_aghq'")
+  }
+
+  # Extract model setup information
+  model_info <- list(
+    family = object$model_setup$family,
+    link = object$model_setup$link,
+    field = object$model_setup$field,
+    iid = object$model_setup$iid
+  )
+
+  # Get AGHQ summary directly
+  aghq_summary <- NULL
+  if (!is.null(object$aghq_model)) {
+    # Store the direct summary object for later use
+    aghq_summary <- summary(object$aghq_model)
+    quad_points <- object$aghq_model$normalized_posterior$grid$level[[1]]
+  }
+
+  # Create the summary object
+  out <- list(
+    model_info = model_info,
+    aghq_summary = aghq_summary,
+    quad_points = quad_points
+  )
+
+  # Set the class
+  class(out) <- c("summary.disag_model_mmap_aghq", "list")
+
+  return(out)
+}
+
+#' Print method for 'summary.disag_model_mmap_aghq' objects (direct approach)
+#'
+#' @description
+#' Displays the summary information for a multi-map disaggregation model
+#' in a well-formatted way, directly using the AGHQ model's summary information.
+#'
+#' @param x A 'summary.disag_model_mmap_aghq' object.
+#' @param ... Additional arguments (not used).
+#'
+#' @return Invisibly returns the original summary object.
+#' @method print summary.disag_model_mmap_aghq
+#' @export
+print.summary.disag_model_mmap_aghq <- function(x, ...) {
+  # Check if x is a valid summary.disag_model_mmap_aghq object
+  if (!inherits(x, "summary.disag_model_mmap_aghq")) {
+    stop("Object must be of class 'summary.disag_model_mmap_aghq'")
+  }
+
+  # Print header and basic model information
+  cat("Summary of disaggregation model (multi-map) fit with AGHQ\n")
+  cat("=======================================================\n")
+  cat(sprintf("Family: %s\n", x$model_info$family))
+  cat(sprintf("Link function: %s\n", x$model_info$link))
+  cat(sprintf("Spatial field included: %s\n", ifelse(x$model_info$field, "Yes", "No")))
+  cat(sprintf("IID effects included: %s\n", ifelse(x$model_info$iid, "Yes", "No")))
+  cat(sprintf("Quadrature Points: %s\n", x$quad_points))
+
+
+  # Print AGHQ summary if available
+  if (!is.null(x$aghq_summary)) {
+    cat("\nParameter estimates:\n")
+    cat("------------------\n")
+
+    # Print the summary table directly
+    print(x$aghq_summary)
+  } else {
+    cat("\nNo AGHQ summary information available.\n")
+    cat("Try using summary(object$aghq_model) directly for more information.\n")
+  }
+
+  # Return invisibly
+  return(invisible(x))
 }
