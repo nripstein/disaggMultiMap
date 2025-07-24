@@ -12,7 +12,8 @@ make_model_object_mmap(
   field = TRUE,
   iid = TRUE,
   silent = TRUE,
-  starting_values = NULL
+  starting_values = NULL,
+  verbose = FALSE
 )
 }
 \arguments{

@@ -10,6 +10,7 @@ prepare_data_mmap(
   aggregation_rasters_list = NULL,
   id_var = "area_id",
   response_var = "response",
+  categorical_covariate_baselines = NULL,
   sample_size_var = NULL,
   mesh_args = NULL,
   na_action = FALSE,
@@ -27,6 +28,8 @@ prepare_data_mmap(
 \item{id_var}{Name of the polygon ID column in each 'sf'.}
 
 \item{response_var}{Name of the response column.}
+
+\item{categorical_covariate_baselines}{Named list; names are raster layers to treat as categorical, values are baseline level to drop.}
 
 \item{sample_size_var}{Name of the sample-size column (for binomial models); may be NULL.}
 

@@ -2,13 +2,19 @@
 % Please edit documentation in R/summary.R
 \name{print.disag_model_mmap_aghq}
 \alias{print.disag_model_mmap_aghq}
-\title{Summarize model fit for multi-map disaggregation model fit with AGHQ using AGHQ's builtin summary}
+\title{Print method for 'disag_model_mmap_aghq' objects}
 \usage{
-\method{print}{disag_model_mmap_aghq}(object)
+\method{print}{disag_model_mmap_aghq}(x, ..., max_print = 30)
 }
 \arguments{
-\item{object}{}
+\item{x}{A 'disag_model_mmap_aghq' object.}
+
+\item{...}{Additional arguments (not used).}
+}
+\value{
+Invisibly returns the original 'disag_model_mmap_aghq' object.
 }
 \description{
-Summarize model fit for multi-map disaggregation model fit with AGHQ using AGHQ's builtin summary
+Displays a brief overview of a multi-map disaggregation model:
+model family, link function, and components included.
 }

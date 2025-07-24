@@ -12,7 +12,8 @@ prepare_time_point(
   id_var,
   response_var,
   sample_size_var,
-  na_action
+  na_action,
+  categorical_covariate_baselines
 )
 }
 \arguments{
