@@ -1,4 +1,49 @@
-
+#' Fit a multi‑map disaggregation model (via AGHQ or TMB)
+#'
+#' @param engine Character; either "AGHQ" or "TMB"
+#' @export
+disag_model_mmap <- function(data,
+                             priors = NULL,
+                             family = "poisson",
+                             link   = "log",
+                             engine = c("AGHQ","TMB"),
+                             k = 3, # AGHQ‑only argument
+                             field           = TRUE,
+                             iid             = TRUE,
+                             silent          = TRUE,
+                             starting_values = NULL,
+                             verbose         = FALSE,
+                             ...) {
+  engine <- match.arg(engine)
+  if (engine == "AGHQ") {
+    disag_model_mmap_aghq(
+      data            = data,
+      priors          = priors,
+      family          = family,
+      link            = link,
+      k               = k,
+      field           = field,
+      iid             = iid,
+      silent          = silent,
+      starting_values = starting_values,
+      verbose         = verbose,
+      ...
+    )
+  } else {
+    disag_model_mmap_tmb(
+      data            = data,
+      priors          = priors,
+      family          = family,
+      link            = link,
+      field           = field,
+      iid             = iid,
+      silent          = silent,
+      starting_values = starting_values,
+      verbose         = verbose,
+      ...
+    )
+  }
+}
 
 #' Build the TMB ADFun object for multi-map disaggregation
 #'
@@ -245,53 +290,3 @@ make_model_object_mmap <- function(data,
 
   return(obj)
 }
-
-
-
-#’ Fit a multi‑map disaggregation model (via AGHQ or TMB)
-#’
-#’ @param engine Character; either "AGHQ" or "TMB"
-#’ @export
-disag_model_mmap <- function(data,
-                             priors = NULL,
-                             family = "poisson",
-                             link   = "log",
-                             engine = c("AGHQ","TMB"),
-                             k = 3, # AGHQ‑only argument
-                             field           = TRUE,
-                             iid             = TRUE,
-                             silent          = TRUE,
-                             starting_values = NULL,
-                             verbose         = FALSE,
-                             ...) {
-  engine <- match.arg(engine)
-  if (engine == "AGHQ") {
-    disag_model_mmap_aghq(
-      data            = data,
-      priors          = priors,
-      family          = family,
-      link            = link,
-      k               = k,
-      field           = field,
-      iid             = iid,
-      silent          = silent,
-      starting_values = starting_values,
-      verbose         = verbose,
-      ...
-    )
-  } else {
-    disag_model_mmap_tmb(
-      data            = data,
-      priors          = priors,
-      family          = family,
-      link            = link,
-      field           = field,
-      iid             = iid,
-      silent          = silent,
-      starting_values = starting_values,
-      verbose         = verbose,
-      ...
-    )
-  }
-}
-

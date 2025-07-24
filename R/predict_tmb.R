@@ -82,7 +82,23 @@ predict.disag_model_mmap_tmb <- function(object, new_data = NULL,
 }
 
 
-# Helper: Predict the mean prediction
+#' Predict mean for multi-map disaggregation (TMB)
+#'
+#' @description
+#' Given a fitted TMB model object and optional new covariate data,
+#' compute the mean‐only prediction (no uncertainty) for one raster.
+#'
+#' @param model_output A 'disag_model_mmap_tmb' model fit.
+#' @param new_data Optional SpatRaster (or list) of new covariates.
+#' @param predict_iid Logical; if TRUE, include the IID polygon effect.
+#' @param ... Unused.
+#'
+#' @return A list with components:
+#'   - prediction: SpatRaster of the mean prediction on the response scale.
+#'   - field: SpatRaster of the spatial field component (or NULL).
+#'   - iid: SpatRaster of the IID effect (or NULL).
+#'   - covariates: SpatRaster of the linear predictor from covariates only.
+#' @keywords internal
 predict_model_mmap <- function(model_output, new_data = NULL, predict_iid = FALSE, newdata = NULL) {
   if (!is.null(newdata) && missing(new_data)) {
     new_data <- newdata
@@ -101,7 +117,23 @@ predict_model_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
   return(prediction)
 }
 
-# Uncertainty using Monte Carlo draws
+#' Estimate uncertainty via Monte Carlo for multi-map disaggregation (TMB)
+#'
+#' @description
+#' Draw Monte Carlo samples of model parameters, propagate through the
+#' prediction function, and compute credible intervals at each cell.
+#'
+#' @param model_output A 'disag_model_mmap_tmb' model fit.
+#' @param new_data Optional SpatRaster (or list) of new covariates.
+#' @param predict_iid Logical; if TRUE, include the IID polygon effect.
+#' @param N Integer; number of Monte Carlo draws (default 100).
+#' @param CI Numeric in (0,1); credible‐interval level (default 0.95).
+#' @param ... Unused.
+#'
+#' @return A list with components:
+#'   - realisations: list of SpatRasters of each draw.
+#'   - predictions_ci: list with 'lower' and 'upper' SpatRaster stacks.
+#' @keywords internal
 predict_uncertainty_mmap <- function(model_output, new_data = NULL,
                                      predict_iid = FALSE, N = 100, CI = 0.95, newdata = NULL) {
   if (!is.null(newdata) && missing(new_data)) {
@@ -169,7 +201,21 @@ predict_uncertainty_mmap <- function(model_output, new_data = NULL,
   ))
 }
 
-# Helper: Setup objects for prediction in multi-map case
+#' Prepare prediction objects for multi-map disaggregation (TMB)
+#'
+#' @description
+#' Constructs the covariate rasters, field projector, and IID shapefile
+#' objects needed by the single‐raster prediction routines.
+#'
+#' @param model_output A 'disag_model_mmap_tmb' model fit.
+#' @param new_data Optional SpatRaster (or list) of new covariates.
+#' @param predict_iid Logical; if TRUE, include the IID polygon effect.
+#'
+#' @return A list with elements:
+#'   - covariates: SpatRaster of covariate layers.
+#'   - field_objects: list with 'coords' matrix and 'Amatrix' projector (or NULL).
+#'   - iid_objects: list with 'shapefile' and 'template' (or NULL).
+#' @keywords internal
 setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALSE) {
   new_data <- disaggregation:::check_new_data(new_data, model_output)
 
@@ -225,7 +271,22 @@ setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
               iid_objects = iid_objects))
 }
 
-# Helper: Predict a single raster using model parameters
+#' Predict on a single raster for multi-map disaggregation (TMB)
+#'
+#' @description
+#' Apply the linear predictor, add spatial field and IID components,
+#' then transform via the link to return a SpatRaster prediction.
+#'
+#' @param model_parameters Named list of parameter vectors (split by name).
+#' @param objects List from 'setup_objects_mmap' containing data and projectors.
+#' @param link_function Character; one of 'identity', 'log', or 'logit'.
+#'
+#' @return A list with components:
+#'   - prediction: SpatRaster on the response scale.
+#'   - field: SpatRaster of field contribution (or NULL).
+#'   - iid: SpatRaster of IID contribution (or NULL).
+#'   - covariates: SpatRaster of the covariate linear predictor.
+#' @keywords internal
 predict_single_raster_mmap <- function(model_parameters, objects, link_function) {
 
   # Determine how many layers really exist
