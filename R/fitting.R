@@ -60,7 +60,7 @@ disag_model_mmap <- function(data,
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
 #' @param starting_values NULL or named list of starting values.
 #' @return A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
-#' @keywords internal
+#' @keywords external
 make_model_object_mmap <- function(data,
                                    priors = NULL,
                                    family = "gaussian",
@@ -255,12 +255,15 @@ make_model_object_mmap <- function(data,
       nodemean  = factor(rep(NA, n_s))
     ))
   }
-  if (family_id == 3) { # NB
+  # -- Always drop the iideffect vector for NB --
+  if (family_id == 3) {
     tmb_map <- c(tmb_map, list(
-      iideffect = factor(rep(NA, nrow(data$polygon_data))) # no iid effect for each polygon, but still include iideffect_log_tau
+      iideffect = factor(rep(NA, nrow(data$polygon_data)))
     ))
   }
-  if (!iid) {
+
+  # -- Only drop iideffect_log_tau when iid=FALSE and it's not NB --
+  if (!iid && family_id != 3) {
     tmb_map <- c(tmb_map, list(
       iideffect_log_tau = factor(NA),
       iideffect         = factor(rep(NA, nrow(data$polygon_data)))
@@ -276,7 +279,9 @@ make_model_object_mmap <- function(data,
   #-- 11. Identify random effects --
   random_effects <- character(0)
   if (field) random_effects <- c(random_effects, "nodemean")
-  if (iid) random_effects <- c(random_effects, "iideffect")
+  if (iid && family_id != 3) { # include polygon-specific random‐effect vector when iid and not NB
+    random_effects <- c(random_effects, "iideffect")
+  }
 
   #-- 12. Make objective function in TMB--
   obj <- TMB::MakeADFun(
