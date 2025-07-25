@@ -132,6 +132,18 @@ Type objective_function<Type>::operator()()
   if(family == 0) {
     nll -= dgamma(tau_gaussian, prior_gamma_shape, prior_gamma_rate, true);
   }
+
+  if (family == 3) {  // NB prior  
+    // PC‐prior on τ = exp(iideffect_log_tau), tail P(τ>τ_max)=p_tail
+    Type lambda_nb = -log(prior_iideffect_sd_prob)
+                   / prior_iideffect_sd_max;
+    // log π(η) = log(λ) + η − λ·e^η
+    nll -= (
+        log(lambda_nb)
+      + iideffect_log_tau
+      - lambda_nb * exp(iideffect_log_tau)
+    );
+  }
   
   if(field) {
     // Likelihood of hyperparameters for field.
@@ -192,23 +204,7 @@ Type objective_function<Type>::operator()()
   vector<Type> reportnll(n_polygons);
   vector<Type> reportpolygonsd(n_polygons);
 
-  if(family==3) {
-    Type lambda_nb = -log(prior_iideffect_sd_prob)
-                     / prior_iideffect_sd_max;
-    // π(η) = λ e^{-λ e^{η}} · e^{η}
-    Type log_pcdensity_nb =
-        log(lambda_nb)
-      + iideffect_log_tau
-      - lambda_nb * exp(iideffect_log_tau);
-    nll -= log_pcdensity_nb;
 
-    // ——— Negative‐Binomial likelihood (mixing‐Gamma with var = τ²) ———
-    Type tau_nb = exp(iideffect_log_tau);
-    // α = r = 1 / τ²
-    Type r = Type(1.0) / (tau_nb * tau_nb);
-    // p = 1 / (1 + τ² · μ)
-    Type p = Type(1.0) / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
-  }
   
   // Loop over each polygon (each polygon now carries an associated time index)
   for (int polygon = 0; polygon < n_polygons; polygon++) {
@@ -304,9 +300,24 @@ Type objective_function<Type>::operator()()
       //            r, p,
       //            true);
 
+      // JUL 25
+      Type tau_nb = exp(iideffect_log_tau);
+      // α = r = 1/τ²
+      Type r = Type(1.0) / (tau_nb * tau_nb);
+      // p = 1 / (1 + τ² · μ)
+      Type p = Type(1.0) 
+             / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
 
-      nll -= dnbinom(polygon_response_data[polygon], r, p, true);
-      reportnll[polygon] = -dnbinom(polygon_response_data[polygon], r, p, true);
+      nll -= dnbinom(polygon_response_data[polygon],
+                     r, p,
+                     true);
+      reportnll[polygon] =
+        -dnbinom(polygon_response_data[polygon],
+                 r, p,
+                 true);
+
+
+
     
       
     } else {
