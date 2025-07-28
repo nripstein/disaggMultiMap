@@ -262,7 +262,7 @@ Type objective_function<Type>::operator()()
       nll -= dpois(polygon_response_data[polygon], pred_polygoncases, true);
       reportnll[polygon] = -dpois(polygon_response_data[polygon], pred_polygoncases, true);
     } else if(family == 3) {
-      // Type tau_nb = exp(iideffect_log_tau);
+      Type tau_nb = exp(iideffect_log_tau);
 
       // // tau_nb prior Gamma(a=1,b=2):
       // Type a = Type(1.0);
