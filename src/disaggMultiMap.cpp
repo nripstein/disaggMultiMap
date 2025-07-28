@@ -155,10 +155,6 @@ Type objective_function<Type>::operator()()
     nll -= dgamma(tau_nb, a, b, true);
     // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
     nll -= log(tau_nb);
-
-    // NB‐likelihood:
-    Type y_i  = polygon_response_data[polygon];
-    Type mu_i  = pred_polygoncases;
   }
 
   if(field) {
@@ -277,36 +273,25 @@ Type objective_function<Type>::operator()()
       // nll -= log(tau_nb);
 
       // // NB‐likelihood:
-      // Type y_i  = polygon_response_data[polygon];
-      // Type mu_i  = pred_polygoncases;
+      Type y_i  = polygon_response_data[polygon];
+      Type mu_i  = pred_polygoncases;
 
 
-      // Type r = Type(1.0)/tau_nb;          
-      // Type p = 1/(1+tau_nb*mu_i);
+      Type r = Type(1.0)/tau_nb;          
+      Type p = 1/(1+tau_nb*mu_i);
 
 
-      // nll -= dnbinom(y_i, r, p, true);
-      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
+      nll -= dnbinom(y_i, r, p, true);
+      reportnll[polygon] = -dnbinom(y_i, r, p, true);
 
-      // JUL 24
-          // ——— PC prior on NB‐dispersion τ = exp(η) ———
-      // Tail: P(τ > prior_iideffect_sd_max) = prior_iideffect_sd_prob
-      // λ = -log(p_tail) / d_max   (here d_max = τ_max)
-      // Type lambda_nb = -log(prior_iideffect_sd_prob)
-      //                / prior_iideffect_sd_max;
-      // // π(η) = λ e^{-λ e^{η}} · e^{η}
-      // Type log_pcdensity_nb =
-      //     log(lambda_nb)
-      //   + iideffect_log_tau
-      //   - lambda_nb * exp(iideffect_log_tau);
-      // nll -= log_pcdensity_nb;
 
-      // // ——— Negative‐Binomial likelihood (mixing‐Gamma with var = τ²) ———
+      // JUL 25
       // Type tau_nb = exp(iideffect_log_tau);
-      // // α = r = 1 / τ²
+      // // α = r = 1/τ²
       // Type r = Type(1.0) / (tau_nb * tau_nb);
       // // p = 1 / (1 + τ² · μ)
-      // Type p = Type(1.0) / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
+      // Type p = Type(1.0) 
+      //        / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
 
       // nll -= dnbinom(polygon_response_data[polygon],
       //                r, p,
@@ -315,22 +300,6 @@ Type objective_function<Type>::operator()()
       //   -dnbinom(polygon_response_data[polygon],
       //            r, p,
       //            true);
-
-      // JUL 25
-      Type tau_nb = exp(iideffect_log_tau);
-      // α = r = 1/τ²
-      Type r = Type(1.0) / (tau_nb * tau_nb);
-      // p = 1 / (1 + τ² · μ)
-      Type p = Type(1.0) 
-             / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
-
-      nll -= dnbinom(polygon_response_data[polygon],
-                     r, p,
-                     true);
-      reportnll[polygon] =
-        -dnbinom(polygon_response_data[polygon],
-                 r, p,
-                 true);
 
 
 
