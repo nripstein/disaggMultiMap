@@ -133,18 +133,34 @@ Type objective_function<Type>::operator()()
     nll -= dgamma(tau_gaussian, prior_gamma_shape, prior_gamma_rate, true);
   }
 
-  if (family == 3) {  // NB prior  
-    // PC‐prior on τ = exp(iideffect_log_tau), tail P(τ>τ_max)=p_tail
-    Type lambda_nb = -log(prior_iideffect_sd_prob)
-                   / prior_iideffect_sd_max;
-    // log π(η) = log(λ) + η − λ·e^η
-    nll -= (
-        log(lambda_nb)
-      + iideffect_log_tau
-      - lambda_nb * exp(iideffect_log_tau)
-    );
-  }
+  // if (family == 3) {  // NB PC prior  
+  //   // PC‐prior on tau = exp(iideffect_log_tau), tail P(τ>τ_max)=p_tail
+  //   Type lambda_nb = -log(prior_iideffect_sd_prob)
+  //                  / prior_iideffect_sd_max;
+  //   // log π(η) = log(λ) + η − λ·e^η
+  //   nll -= (
+  //       log(lambda_nb)
+  //     + iideffect_log_tau
+  //     - lambda_nb * exp(iideffect_log_tau)
+  //   );
+  // }
   
+  if (family == 3) {  // NB Gamma prior  
+    Type tau_nb = exp(iideffect_log_tau);
+
+    // tau_nb prior Gamma(a=1,b=2):
+    Type a = Type(1.0);
+    Type b = Type(2.0);
+    // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in tau‐space)
+    nll -= dgamma(tau_nb, a, b, true);
+    // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
+    nll -= log(tau_nb);
+
+    // NB‐likelihood:
+    Type y_i  = polygon_response_data[polygon];
+    Type mu_i  = pred_polygoncases;
+  }
+
   if(field) {
     // Likelihood of hyperparameters for field.
     // From https://www.tandfonline.com/doi/full/10.1080/01621459.2017.1415907 (Theorem 2.6)
