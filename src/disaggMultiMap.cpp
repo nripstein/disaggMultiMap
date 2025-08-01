@@ -145,17 +145,26 @@ Type objective_function<Type>::operator()()
   //   );
   // }
   
-  if (family == 3) {  // NB Gamma prior  
+  if (family == 3) {  // NB PC prior   AUG 1
     Type tau_nb = exp(iideffect_log_tau);
 
-    // tau_nb prior Gamma(a=1,b=2):
-    Type a = Type(1.0);
-    Type b = Type(2.0);
-    // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in tau‐space)
-    nll -= dgamma(tau_nb, a, b, true);
-    // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
-    nll -= log(tau_nb);
+    // PC‐prior on tau = exp(iideffect_log_tau), tail P(τ>τ_max)=p_tail
+    Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
+    
+    nll += log(Type(2.0)) + lambda_nb * sqrt(tau_nb) + Type(0.5) * log(tau_nb) - log(lambda_nb);
   }
+
+  // if (family == 3) {  // NB Gamma prior  
+  //   Type tau_nb = exp(iideffect_log_tau);
+
+  //   // tau_nb prior Gamma(a=1,b=2):
+  //   Type a = Type(1.0);
+  //   Type b = Type(2.0);
+  //   // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in tau‐space)
+  //   nll -= dgamma(tau_nb, a, b, true);
+  //   // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
+  //   nll -= log(tau_nb);
+  // }
 
   if(field) {
     // Likelihood of hyperparameters for field.
@@ -218,7 +227,7 @@ Type objective_function<Type>::operator()()
 
 
   
-  // Loop over each polygon (each polygon now carries an associated time index)
+  // Loop over each polygon (each polygon carries an associated time index)
   for (int polygon = 0; polygon < n_polygons; polygon++) {
     // pixel-level predictions for this polygon
     pixel_pred = pixel_linear_pred.segment(start_end_index(polygon, 0), start_end_index(polygon, 1)).array();
