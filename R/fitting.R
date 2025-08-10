@@ -208,7 +208,7 @@ make_model_object_mmap <- function(data,
 
   #-- 9. Build parameter list & map for TMB --
   default_parameters <- list(
-    intercept         = 0,
+    intercept         = -5,
     slope             = rep(0, ncol(cov_matrix)),
     log_tau_gaussian  = 8,
     iideffect         = rep(0, nrow(data$polygon_data)),
