@@ -132,6 +132,12 @@ Type objective_function<Type>::operator()()
   if(family == 0) {
     nll -= dgamma(tau_gaussian, prior_gamma_shape, prior_gamma_rate, true);
   }
+  if (family == 3) {  // Aug 12: NB PC prior: tau ~ Exp(lambda_nb)
+    Type tau_nb = exp(iideffect_log_tau);
+    Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
+
+    nll += lambda_nb * tau_nb - iideffect_log_tau; // drop the constant -log(lambda_nb)
+  }
 
   // if (family == 3) {  // NB PC prior   AUG 1
   //   Type tau_nb = exp(iideffect_log_tau);
@@ -142,17 +148,28 @@ Type objective_function<Type>::operator()()
   //   nll += log(Type(2.0)) + lambda_nb * sqrt(tau_nb) + Type(0.5) * log(tau_nb) - log(lambda_nb);
   // }
 
-  if (family == 3) {  // NB Gamma prior  
-    Type tau_nb = exp(iideffect_log_tau);
+  // if (family == 3) {  // NB Gamma prior  
+  //   Type tau_nb = exp(iideffect_log_tau);
 
-    // tau_nb prior Gamma(a=1,b=2):
-    Type a = Type(1.0);
-    Type b = Type(2.0);
-    // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in tau‐space)
-    nll -= dgamma(tau_nb, a, b, true);
-    // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
-    nll -= log(tau_nb);
-  }
+  //   // tau_nb prior Gamma(a=1,b=2):
+  //   Type a = Type(1.0);
+  //   Type b = Type(2.0);
+  //   // log‐density of tau_nb ~ Gamma(a,b):  (dgamma returns density in tau‐space)
+  //   nll -= dgamma(tau_nb, a, b, true);
+  //   // + Jacobian term:  dτ_nb/dη = τ_nb, so subtract log(τ_nb)
+  //   nll -= log(tau_nb);
+  // }
+
+  // if (family == 3) { // OLD VERSION
+  //   Type eta = iideffect_log_tau;                    // eta = log tau
+  //   Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
+  //   // log π(eta) = log(lambda/2) + 0.5*eta − lambda*exp(0.5*eta)
+  //   Type log_pcdensity_nb = log(lambda_nb / Type(2.0))
+  //                         + Type(0.5) * eta
+  //                         - lambda_nb * exp(Type(0.5) * eta);
+  //   nll -= log_pcdensity_nb;
+  // }
+
 
   if(field) {
     // Likelihood of hyperparameters for field.
@@ -259,20 +276,33 @@ Type objective_function<Type>::operator()()
       nll -= dpois(polygon_response_data[polygon], pred_polygoncases, true);
       reportnll[polygon] = -dpois(polygon_response_data[polygon], pred_polygoncases, true);
     } else if(family == 3) {
-      Type tau_nb = exp(iideffect_log_tau);
-
-
-      // // NB‐likelihood:
+      // AUG 12
+      Type tau_nb = exp(iideffect_log_tau);   // tau is sd of the gamma mixing
       Type y_i  = polygon_response_data[polygon];
-      Type mu_i  = pred_polygoncases;
+      Type mu_i = pred_polygoncases;
 
-
-      Type r = Type(1.0)/tau_nb;          
-      Type p = 1/(1+tau_nb*mu_i);
-
+      // alpha = tau^2
+      Type alpha = tau_nb * tau_nb;
+      // r = 1/alpha, p = 1/(1 + alpha * mu)
+      Type r = Type(1.0) / alpha;
+      Type p = Type(1.0) / (Type(1.0) + alpha * mu_i);
 
       nll -= dnbinom(y_i, r, p, true);
-      reportnll[polygon] = -dnbinom(y_i, r, p, true);
+
+
+      // AUG 1
+      // Type tau_nb = exp(iideffect_log_tau);
+
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i  = pred_polygoncases;
+
+
+      // Type r = Type(1.0)/tau_nb;          
+      // Type p = 1/(1+tau_nb*mu_i);
+
+
+      // nll -= dnbinom(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
 
 
       // JUL 25
