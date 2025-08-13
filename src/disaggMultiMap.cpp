@@ -132,7 +132,19 @@ Type objective_function<Type>::operator()()
   if(family == 0) {
     nll -= dgamma(tau_gaussian, prior_gamma_shape, prior_gamma_rate, true);
   }
-  if (family == 3) {  // Aug 12: NB PC prior: tau ~ Exp(lambda_nb)
+
+  if (family == 3) {  // NB PC prior: tau ~ Exp(lambda), with eta = log(tau) (log scale)
+    Type eta = iideffect_log_tau;  // eta = log(tau)
+    Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
+
+    // pi(tau) = lambda * exp(-lambda * tau), tau = exp(eta)
+    // pi(eta) = pi(tau) * |dtau/deta| = lambda * exp(-lambda * exp(eta)) * exp(eta)
+    // => -log pi(eta) = lambda * exp(eta) - eta   (drop constant)
+    nll += lambda_nb * exp(eta) - eta;
+  }
+
+
+  if (family == 3) {  // Aug 12: NB PC prior: tau ~ Exp(lambda_nb) (non log)
     Type tau_nb = exp(iideffect_log_tau);
     Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
 
@@ -276,18 +288,33 @@ Type objective_function<Type>::operator()()
       nll -= dpois(polygon_response_data[polygon], pred_polygoncases, true);
       reportnll[polygon] = -dpois(polygon_response_data[polygon], pred_polygoncases, true);
     } else if(family == 3) {
-      // AUG 12
-      Type tau_nb = exp(iideffect_log_tau);   // tau is sd of the gamma mixing
-      Type y_i  = polygon_response_data[polygon];
+      // Aug 12 (log version)
+      Type y_i = polygon_response_data[polygon];
       Type mu_i = pred_polygoncases;
 
-      // alpha = tau^2
-      Type alpha = tau_nb * tau_nb;
-      // r = 1/alpha, p = 1/(1 + alpha * mu)
-      Type r = Type(1.0) / alpha;
-      Type p = Type(1.0) / (Type(1.0) + alpha * mu_i);
+      Type eta = iideffect_log_tau;       // eta = log(tau)
+      Type tau_nb = exp(eta);             // tau
+      Type alpha_nb = tau_nb * tau_nb;    // alpha = tau^2
 
-      nll -= dnbinom(y_i, r, p, true);
+      // r = 1/alpha, p = 1/(1 + alpha * mu)
+      // Type r = Type(1.0) / alpha_nb;
+      // Type p = Type(1.0) / (Type(1.0) + alpha_nb * mu_i);
+
+      // nll -= dnbinom(y_i, r, p, true);
+      // reportnll[polygon] = -dnbinom(y_i, r, p, true);
+
+      // // AUG 12 version (non log)
+      // Type tau_nb = exp(iideffect_log_tau);   // tau is sd of the gamma mixing
+      // Type y_i  = polygon_response_data[polygon];
+      // Type mu_i = pred_polygoncases;
+
+      // // alpha = tau^2
+      // Type alpha = tau_nb * tau_nb;
+      // // r = 1/alpha, p = 1/(1 + alpha * mu)
+      // Type r = Type(1.0) / alpha;
+      // Type p = Type(1.0) / (Type(1.0) + alpha * mu_i);
+
+      // nll -= dnbinom(y_i, r, p, true);
 
 
       // AUG 1
