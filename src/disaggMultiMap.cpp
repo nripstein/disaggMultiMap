@@ -297,6 +297,13 @@ Type objective_function<Type>::operator()()
       Type alpha_nb = tau_nb * tau_nb;    // alpha = tau^2
 
       // r = 1/alpha, p = 1/(1 + alpha * mu)
+      Type r = Type(1.0) / alpha_nb;
+      Type p = Type(1.0) / (Type(1.0) + alpha_nb * mu_i);
+
+      nll -= dnbinom(y_i, r, p, true);
+      reportnll[polygon] = -dnbinom(y_i, r, p, true);
+      
+      // r = 1/alpha, p = 1/(1 + alpha * mu)
       // Type r = Type(1.0) / alpha_nb;
       // Type p = Type(1.0) / (Type(1.0) + alpha_nb * mu_i);
 
