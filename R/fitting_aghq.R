@@ -25,6 +25,7 @@ disag_model_mmap_aghq <- function(data,
                                   iid = TRUE,
                                   silent = TRUE,
                                   starting_values = NULL,
+                                  optimizer = "BFGS",
                                   verbose = FALSE) {
   start_time <- Sys.time()
 
@@ -49,7 +50,18 @@ disag_model_mmap_aghq <- function(data,
     verbose         = verbose
   )
 
+  #-- 3. Select optimizer --
+  if (!optimizer %in% c("BFGS", "sparse_trust", "trust")) {
+    stop("`optimizer` must be one of 'BFGS', 'sparse_trust', or 'trust'.")
+  }
+  if (verbose) {
+    message("Using optimizer: ", optimizer)
+  }
+
+  control <- aghq::default_control_tmb()
+  control$optimizer <- optimizer
   #-- 3. Run AGHQ --
+
   message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,

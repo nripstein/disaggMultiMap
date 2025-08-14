@@ -59,6 +59,8 @@ disag_model_mmap <- function(data,
 #' @param iid Logical: include IID polygon effects?
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
 #' @param starting_values NULL or named list of starting values.
+#' @param optimizer Optional; For changing the optimizer used in AGHQ.
+#' @param verbose Logical: if TRUE, print details throughout including runtime.
 #' @return A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
 #' @keywords external
 make_model_object_mmap <- function(data,
@@ -69,6 +71,7 @@ make_model_object_mmap <- function(data,
                                    iid = TRUE,
                                    silent = TRUE,
                                    starting_values = NULL,
+                                   optimizer = NULL,
                                    verbose = FALSE) {
   #-- 1. Validate data prerequisites --
   if (!inherits(data, "disag_data_mmap")) {
