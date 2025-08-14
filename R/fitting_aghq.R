@@ -60,17 +60,17 @@ disag_model_mmap_aghq <- function(data,
 
   control <- aghq::default_control_tmb()
   control$optimizer <- optimizer
-  #-- 3. Run AGHQ --
+  #-- 4. Run AGHQ --
 
   message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,
     k             = k,
     startingvalue = obj$par,
-    control       = aghq::default_control_tmb()
+    control       = control
   )
 
-  #-- 4. Assemble output --
+  #-- 5. Assemble output --
   out <- list(
     aghq_model = aghq_model,
     data = data,
@@ -83,7 +83,7 @@ disag_model_mmap_aghq <- function(data,
   )
   class(out) <- c("disag_model_mmap_aghq", "disag_model_mmap", "list")
 
-  #-- 5. Runtime message --
+  #-- 6. Runtime message --
   if (verbose) {
     elapsed <- difftime(Sys.time(), start_time, units = "mins")
     message(sprintf("disag_model_mmap_aghq() runtime: %.2f minutes", as.numeric(elapsed)))
