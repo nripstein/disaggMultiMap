@@ -12,6 +12,7 @@ disag_model_mmap <- function(data,
                              iid             = TRUE,
                              silent          = TRUE,
                              starting_values = NULL,
+                             optimizer       = NULL,
                              verbose         = FALSE,
                              ...) {
   engine <- match.arg(engine)
@@ -26,6 +27,7 @@ disag_model_mmap <- function(data,
       iid             = iid,
       silent          = silent,
       starting_values = starting_values,
+      optimizer       = optimizer,
       verbose         = verbose,
       ...
     )
