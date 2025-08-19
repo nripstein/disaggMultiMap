@@ -25,7 +25,7 @@ disag_model_mmap_aghq <- function(data,
                                   iid = TRUE,
                                   silent = TRUE,
                                   starting_values = NULL,
-                                  optimizer = "BFGS",
+                                  optimizer = NULL,
                                   verbose = FALSE) {
   start_time <- Sys.time()
 
@@ -51,6 +51,9 @@ disag_model_mmap_aghq <- function(data,
   )
 
   #-- 3. Select optimizer --
+  if (is.null(optimizer)) {
+    optimizer <- "BFGS"
+  }
   if (!optimizer %in% c("BFGS", "sparse_trust", "trust")) {
     stop("`optimizer` must be one of 'BFGS', 'sparse_trust', or 'trust'.")
   }
