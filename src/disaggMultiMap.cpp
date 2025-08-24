@@ -170,6 +170,8 @@ Type objective_function<Type>::operator()()
     Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
     
     nll += log(Type(2.0)) + lambda_nb * sqrt(tau_nb) + Type(0.5) * log(tau_nb) - log(lambda_nb);
+    //jacobian
+    nll -= iideffect_log_tau;
   }
 
   // NEW GAMMA
