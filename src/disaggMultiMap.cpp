@@ -312,18 +312,18 @@ Type objective_function<Type>::operator()()
 
 
       // ——— Negative‐Binomial likelihood ——— (tau, not tausq)
-      Type tau_nb = exp(iideffect_log_tau);
-      Type r      = Type(1.0) / tau_nb;
-      Type p      = Type(1.0) / (Type(1.0) + tau_nb * pred_polygoncases);
+      // Type tau_nb = exp(iideffect_log_tau);
+      // Type r      = Type(1.0) / tau_nb;
+      // Type p      = Type(1.0) / (Type(1.0) + tau_nb * pred_polygoncases);
 
-      // y_i ~ NB(r, p)
-      nll -= dnbinom(polygon_response_data[polygon],
-                     r, p,
-                     true);
-      reportnll[polygon] = 
-          -dnbinom(polygon_response_data[polygon],
-                   r, p,
-                   true);
+      // // y_i ~ NB(r, p)
+      // nll -= dnbinom(polygon_response_data[polygon],
+      //                r, p,
+      //                true);
+      // reportnll[polygon] = 
+      //     -dnbinom(polygon_response_data[polygon],
+      //              r, p,
+      //              true);
 
       // ——— Negative‐Binomial likelihood ——— (tausq, not tau)
       Type tau_nb = exp(iideffect_log_tau);
