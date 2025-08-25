@@ -185,6 +185,15 @@ Type objective_function<Type>::operator()()
     nll -= log_pi_logtau; 
   }
 
+  if (family == 3) { // Exponential PC prior on tau using tau^2 AUG 25
+    Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max; 
+
+    // log pi(iideffect_log_tau) = log(lambda) + iideffect_log_tau - lambda * exp(iideffect_log_tau)
+    Type log_pi_logtau = log(lambda_nb) + iideffect_log_tau - lambda_nb * exp(iideffect_log_tau);
+    nll -= log_pi_logtau;  
+  }
+
+
   // NEW GAMMA
   // if (family == 3) {  // NB Gamma prior  
   //   Type tau_nb = exp(iideffect_log_tau);
