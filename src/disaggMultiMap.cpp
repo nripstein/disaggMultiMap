@@ -311,17 +311,7 @@ Type objective_function<Type>::operator()()
       // reportnll[polygon] = -dnbinom(y_i, r, p, true);
 
 
-      // // NICE PC PRIOR? FROM JULY 24
-      // Type lambda = -log(prior_iideffect_sd_prob)
-      //             / prior_iideffect_sd_max;
-      // // log π(η) = log(λ/2) + 0.5·η − λ·exp(η/2)
-      // Type log_pcdensity_nb =
-      //     log(lambda / Type(2.0))
-      //   + Type(0.5) * iideffect_log_tau
-      //   - lambda * exp(iideffect_log_tau * Type(0.5));
-      // nll -= log_pcdensity_nb;
-
-      // // ——— Negative‐Binomial likelihood ———
+      // ——— Negative‐Binomial likelihood ——— (tau, not tausq)
       Type tau_nb = exp(iideffect_log_tau);
       Type r      = Type(1.0) / tau_nb;
       Type p      = Type(1.0) / (Type(1.0) + tau_nb * pred_polygoncases);
@@ -335,6 +325,19 @@ Type objective_function<Type>::operator()()
                    r, p,
                    true);
 
+      // ——— Negative‐Binomial likelihood ——— (tausq, not tau)
+      Type tau_nb = exp(iideffect_log_tau);
+      Type r      = Type(1.0) / (tau_nb * tau_nb);
+      Type p      = Type(1.0) / (Type(1.0) + tau_nb * tau_nb * pred_polygoncases);
+
+      // y_i ~ NB(r, p)
+      nll -= dnbinom(polygon_response_data[polygon],
+                     r, p,
+                     true);
+      reportnll[polygon] = 
+          -dnbinom(polygon_response_data[polygon],
+                   r, p,
+                   true);
 
 
       
