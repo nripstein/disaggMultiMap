@@ -61,8 +61,8 @@ disag_model_mmap_aghq <- function(data,
     message("Using optimizer: ", optimizer)
   }
 
-  control <- aghq::default_control_tmb()
-  control$method <- optimizer
+  control <- aghq::default_control_tmb(method = optimizer)
+
   #-- 4. Run AGHQ --
 
   message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
