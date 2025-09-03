@@ -9,4 +9,10 @@
 library(testthat)
 library(disaggMultiMap)
 
+# Use devtools::load_all() to load all package functions during development
+# This ensures all package functions are available for testing
+if (!exists("plot_polygons") && requireNamespace("devtools", quietly = TRUE)) {
+  devtools::load_all()
+}
+
 test_check("disaggMultiMap")

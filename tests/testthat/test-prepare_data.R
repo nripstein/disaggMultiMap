@@ -1,51 +1,142 @@
-library(testthat)
-library(sf)
-library(terra)
+test_that("prepare_data_mmap function works as expected", {
 
-test_that("validate_prepare_data_inputs accepts valid inputs", {
-  # ---- create two simple square polygons ----
-  # square 1: (0,0)-(1,1)
-  poly1 <- st_sf(
-    data.frame(id = 1, response = 5),
-    geometry = st_sfc(st_polygon(list(rbind(
-      c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)
-    )))),
-    crs = 4326
+  result <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
+    covariate_rasters_list = test_data_mmap$covariate_rasters_list,
+    aggregation_rasters_list = test_data_mmap$aggregation_rasters_list
   )
-  # square 2: (1,1)-(2,2)
-  poly2 <- st_sf(
-    data.frame(id = 2, response = 3),
-    geometry = st_sfc(st_polygon(list(rbind(
-      c(1,1), c(2,1), c(2,2), c(1,2), c(1,1)
-    )))),
-    crs = 4326
+
+  # Use modern validation function
+  validate_disag_data_mmap_structure(
+    result,
+    expected_times = test_data_mmap$n_times,
+    expected_polygons = test_data_mmap$n_polygons
   )
-  polygon_list <- list(poly1, poly2)
 
-  # ---- matching covariate rasters ----
-  r1 <- rast(nrows=2, ncols=2, xmin=0, xmax=2, ymin=0, ymax=2)
-  values(r1) <- matrix(1:4, 2, 2)
-  r2 <- r1 + 4
-  cov_list <- list(r1, r2)
+  # Check temporal consistency
+  validate_temporal_consistency(result)
+})
 
-  # ---- matching aggregation rasters ----
-  a1 <- rast(r1); values(a1) <- rep(1, ncell(a1))
-  a2 <- rast(r2); values(a2) <- rep(2, ncell(a2))
-  agg_list <- list(a1, a2)
+test_that("prepare_data_mmap function with sample size works as expected", {
 
-  # ---- call function and expect no error ----
-  expect_silent(
-    out <- validate_prepare_data_inputs(
-      polygon_shapefile_list   = polygon_list,
-      covariate_rasters_list   = cov_list,
-      aggregation_rasters_list = agg_list,
-      id_var       = "id",
-      response_var = "response",
-      sample_size_var = NULL,
-      make_mesh    = TRUE
+  result <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap_binomial$polygon_shapefile_list,
+    covariate_rasters_list = test_data_mmap_binomial$covariate_rasters_list,
+    aggregation_rasters_list = test_data_mmap_binomial$aggregation_rasters_list,
+    sample_size_var = 'sample_size',
+    make_mesh = FALSE
+  )
+
+  validate_disag_data_mmap_structure(result)
+  expect_true(is.null(result$mesh))
+  expect_equal(sum(is.na(result$polygon_data$N)), 0)
+})
+
+test_that("prepare_data_mmap function deals with NAs as expected", {
+
+  # Should error without na_action
+  expect_error(
+    prepare_data_mmap(
+      polygon_shapefile_list = test_data_mmap_nas$polygon_shapefile_list,
+      covariate_rasters_list = test_data_mmap_nas$covariate_rasters_list,
+      aggregation_rasters_list = test_data_mmap_nas$aggregation_rasters_list
     )
   )
 
-  # ---- it should return invisibly TRUE ----
-  expect_true(is.logical(out) && length(out) == 1 && out)
+  # Should work with na_action = TRUE
+  result <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap_nas$polygon_shapefile_list,
+    covariate_rasters_list = test_data_mmap_nas$covariate_rasters_list,
+    aggregation_rasters_list = test_data_mmap_nas$aggregation_rasters_list,
+    na_action = TRUE,
+    make_mesh = FALSE
+  )
+
+  validate_disag_data_mmap_structure(result)
+  expect_equal(sum(is.na(result$polygon_data$response)), 0)
+  expect_equal(sum(is.na(result$covariate_data)), 0)
+  expect_equal(sum(is.na(result$aggregation_pixels)), 0)
+})
+
+test_that("prepare_data_mmap handles categorical covariates correctly", {
+
+  result <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap_categorical$polygon_shapefile_list,
+    covariate_rasters_list = test_data_mmap_categorical$covariate_rasters_list,
+    aggregation_rasters_list = test_data_mmap_categorical$aggregation_rasters_list,
+    categorical_covariate_baselines = list(landuse = "urban")
+  )
+
+  validate_disag_data_mmap_structure(result)
+
+  # Check categorical encoding
+  validate_categorical_encoding(
+    result$covariate_data,
+    c("urban", "rural", "forest"),
+    "urban"
+  )
+})
+
+test_that("prepare_data_mmap validates multi-map inputs correctly", {
+
+  # Test mismatched list lengths
+  expect_error(
+    prepare_data_mmap(
+      polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
+      covariate_rasters_list = test_data_mmap$covariate_rasters_list[1:2],
+      aggregation_rasters_list = test_data_mmap$aggregation_rasters_list
+    )
+  )
+
+  # Test wrong object types
+  expect_error(
+    prepare_data_mmap(
+      polygon_shapefile_list = list("not_sf", "objects"),
+      covariate_rasters_list = test_data_mmap$covariate_rasters_list,
+      aggregation_rasters_list = test_data_mmap$aggregation_rasters_list
+    )
+  )
+})
+
+test_that("prepare_data_mmap works without covariates", {
+
+  result <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
+    covariate_rasters_list = NULL,
+    aggregation_rasters_list = test_data_mmap$aggregation_rasters_list,
+    make_mesh = FALSE
+  )
+
+  validate_disag_data_mmap_structure(result)
+  expect_null(result$covariate_rasters_list)
+
+  # Should only have ID columns and aggregation in covariate_data
+  expected_cols <- c("ID", "cell", "poly_local_id", "time")
+  expect_setequal(names(result$covariate_data), expected_cols)
+})
+
+test_that("getStartendindex_mmap helper function works correctly", {
+
+  # Create simple test data
+  covariates <- data.frame(
+    poly_local_id = c(1, 1, 1, 2, 2, 3, 3, 3, 3),
+    cell = 1:9,
+    temp = rnorm(9)
+  )
+
+  polygon_data <- data.frame(
+    poly_local_id = c(1, 2, 3),
+    response = c(10, 20, 30)
+  )
+
+  result <- getStartendindex_mmap(covariates, polygon_data)
+
+  expect_type(result, "integer")
+  expect_true(is.matrix(result))
+  expect_equal(nrow(result), nrow(polygon_data))
+  expect_equal(ncol(result), 2)
+
+  # Check 0-indexing (C++ style)
+  expected_matrix <- matrix(c(0, 3, 5, 2, 4, 8), nrow = 3, ncol = 2)
+  expect_equal(result, expected_matrix)
 })
