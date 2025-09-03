@@ -61,7 +61,7 @@ disag_model_mmap <- function(data,
 #' @param iid Logical: include IID polygon effects?
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
 #' @param starting_values NULL or named list of starting values.
-#' @param optimizer Optional; For changing the optimizer used in AGHQ.
+#' @param optimizer Optional; For changing the arguments used in AGHQ.
 #' @param verbose Logical: if TRUE, print details throughout including runtime.
 #' @return A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
 #' @keywords external
@@ -296,7 +296,9 @@ make_model_object_mmap <- function(data,
     random     = random_effects,
     silent     = silent,
     DLL        = "disaggMultiMap"
+    # inner_control = list(trace = 10, REPORT=1) # for debugging
   )
+
 
   return(obj)
 }
