@@ -8,6 +8,7 @@
 #' @param priors Optional named list of prior specifications (see internal helper).
 #' @param family One of "gaussian", "binomial", "poisson", or "negbinomial".
 #' @param link One of "identity", "logit", or "log".
+#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
 #' @param k Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
@@ -20,6 +21,7 @@ disag_model_mmap_aghq <- function(data,
                                   priors = NULL,
                                   family = "poisson",
                                   link = "log",
+                                  time_varying_betas = FALSE,
                                   k = 1,
                                   field = TRUE,
                                   iid = TRUE,
@@ -43,6 +45,7 @@ disag_model_mmap_aghq <- function(data,
     priors          = priors,
     family          = family,
     link            = link,
+    time_varying_betas = time_varying_betas,
     field           = field,
     iid             = iid,
     silent          = silent,
@@ -72,6 +75,10 @@ disag_model_mmap_aghq <- function(data,
     startingvalue = obj$par,
     control       = control
   )
+
+  # RENAME
+  coef_meta  <- compute_coef_meta(data)
+  aghq_model <- rename_aghq_model_names(aghq_model, coef_meta, time_varying_betas)
 
   #-- 5. Assemble output --
   out <- list(

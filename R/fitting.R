@@ -1,12 +1,14 @@
 #' Fit a multi‑map disaggregation model (via AGHQ or TMB)
 #'
 #' @param engine Character; either "AGHQ" or "TMB"
+#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
 #' @export
 disag_model_mmap <- function(data,
                              priors = NULL,
                              family = "poisson",
                              link   = "log",
                              engine = c("AGHQ","TMB"),
+                             time_varying_betas = FALSE,
                              k = 3, # AGHQ‑only argument
                              field           = TRUE,
                              iid             = TRUE,
@@ -22,6 +24,7 @@ disag_model_mmap <- function(data,
       priors          = priors,
       family          = family,
       link            = link,
+      time_varying_betas = time_varying_betas,
       k               = k,
       field           = field,
       iid             = iid,
@@ -37,6 +40,7 @@ disag_model_mmap <- function(data,
       priors          = priors,
       family          = family,
       link            = link,
+      time_varying_betas = time_varying_betas,
       field           = field,
       iid             = iid,
       silent          = silent,
@@ -57,6 +61,7 @@ disag_model_mmap <- function(data,
 #' @param priors NULL or named list overriding default hyperpriors.
 #' @param family One of "gaussian", "binomial", "poisson", "negbinomial".
 #' @param link One of "identity", "logit", "log".
+#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
 #' @param field Logical: include spatial field?
 #' @param iid Logical: include IID polygon effects?
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
@@ -69,6 +74,7 @@ make_model_object_mmap <- function(data,
                                    priors = NULL,
                                    family = "gaussian",
                                    link = "identity",
+                                   time_varying_betas = FALSE,
                                    field = TRUE,
                                    iid = TRUE,
                                    silent = TRUE,
@@ -132,6 +138,14 @@ make_model_object_mmap <- function(data,
   n_s <- nrow(spde$M0)
 
   #-- 6. Prepare covariate matrix --
+
+  #-- Early validation for time-varying betas and covariate consistency --
+  validate_timevarying_covariates(
+    covariate_rasters_list = data$covariate_rasters_list,
+    time_varying_betas     = time_varying_betas,
+    where = "make_model_object_mmap()"
+  )
+
   # Select covariate columns after preprocessing, including any one-hot dummies:
   reserved <- c("ID", "cell", "poly_local_id", "time")
   cov_cols <- setdiff(names(data$covariate_data), reserved)
@@ -170,6 +184,11 @@ make_model_object_mmap <- function(data,
       }
     }
   }
+
+  # -- 6b. Time metadata for pixel rows (for time-dependent betas) --
+  n_times <- length(data$time_points)
+  pixel_time_index <- as.integer(data$covariate_data$time)
+  ncov <- as.integer(ncol(cov_matrix))
 
   #-- 7. Set up default hyperpriors --
   bbox <- sf::st_bbox(data$polygon_shapefile_list[[1]])
@@ -213,8 +232,15 @@ make_model_object_mmap <- function(data,
 
   #-- 9. Build parameter list & map for TMB --
   default_parameters <- list(
+    # Shared betas
     intercept         = -5,
-    slope             = rep(0, ncol(cov_matrix)),
+    slope             = rep(0, ncov),
+
+    # Time-varying betas
+    intercept_t       = rep(-5, n_times),
+    slope_t           = rep(0, ncov * n_times),
+
+    # Hyper/latent parameters
     log_tau_gaussian  = 8,
     iideffect         = rep(0, nrow(data$polygon_data)),
     iideffect_log_tau = 1,
@@ -222,6 +248,26 @@ make_model_object_mmap <- function(data,
     log_rho           = 4,
     nodemean          = rep(0, n_s)
   )
+
+  # Names for slopes
+  # Shared
+  if (ncov > 0L) {
+    names(default_parameters$slope) <- colnames(cov_matrix)  # or cov_cols
+  }
+
+  # Time-varying (time-major order: all p covariates for t=1, then t=2, …)
+  if (n_times > 0L) {
+    names(default_parameters$intercept_t) <- paste0("intercept_t", seq_len(n_times))
+  }
+  if (ncov > 0L && n_times > 0L) {
+    names(default_parameters$slope_t) <- paste0(
+      rep(colnames(cov_matrix), times = n_times),
+      "_t",
+      rep(seq_len(n_times), each = ncov)
+    )
+  }
+
+
   parameters <- if (is.null(starting_values)) {
     default_parameters
   } else {
@@ -246,7 +292,13 @@ make_model_object_mmap <- function(data,
       link = link_id,
       nu = nu,
       field = as.integer(field),
-      iid = as.integer(iid)
+      iid = as.integer(iid),
+
+      # new
+      pixel_time_index   = pixel_time_index,
+      n_times            = as.integer(n_times),
+      ncov               = as.integer(ncov),
+      time_varying_betas = as.integer(time_varying_betas)
     ),
     final_priors
   )
@@ -277,8 +329,20 @@ make_model_object_mmap <- function(data,
   if (family_id != 0) { # non‐Gaussian
     tmb_map <- c(tmb_map, list(log_tau_gaussian = factor(NA)))
   }
-  if (!has_covariates) {
-    tmb_map <- c(tmb_map, list(slope = factor(rep(NA, 0))))
+  # if (!has_covariates) {
+  #   tmb_map <- c(tmb_map, list(slope = factor(rep(NA, 0))))
+  # }
+
+  if (time_varying_betas) {     # Keep: intercept_t, slope_t
+    tmb_map <- c(tmb_map, list(
+      intercept = factor(NA),
+      slope     = factor(rep(NA, ncov))   # length zero if ncov == 0 (which is ok)
+    ))
+  } else {     # Keep: intercept, slope
+    tmb_map <- c(tmb_map, list(
+      intercept_t = factor(rep(NA, n_times)),
+      slope_t     = factor(rep(NA, ncov * n_times))  # length zero if p == 0 (which is ok)
+    ))
   }
 
   #-- 11. Identify random effects --
@@ -299,6 +363,53 @@ make_model_object_mmap <- function(data,
     # inner_control = list(trace = 10, REPORT=1) # for debugging
   )
 
-
   return(obj)
 }
+
+
+#' Validate covariate layer consistency across time
+#'
+#' @param covariate_rasters_list list or NULL; each element is a multilayer raster/brick/spatRaster
+#' @param time_varying_betas logical; when TRUE, enforce identical layer names and order across time
+#' @param where character; caller label for clearer error messages
+#' @keywords internal
+validate_timevarying_covariates <- function(covariate_rasters_list,
+                                            time_varying_betas,
+                                            where = "make_model_object_mmap()") {
+  if (!isTRUE(time_varying_betas)) return(TRUE)
+
+  # Intercept-only automatically passes test
+  if (is.null(covariate_rasters_list)) return(TRUE)
+
+  if (!is.list(covariate_rasters_list) || length(covariate_rasters_list) < 1L) {
+    stop(where, ": `covariate_rasters_list` must be a non-empty list when provided.",
+         call. = FALSE)
+  }
+
+  base_names <- terra::names(covariate_rasters_list[[1L]])
+  base_len <- length(base_names)
+
+  for (ii in seq_along(covariate_rasters_list)) {
+    nm  <- terra::names(covariate_rasters_list[[ii]])
+    len <- length(nm)
+    same_len   <- identical(len, base_len)
+    same_names <- identical(nm, base_names)
+    if (!(same_len && same_names)) {
+      exp_str <- if (base_len == 0L) "<none>" else paste(base_names, collapse = ", ")
+      got_str <- if (len      == 0L) "<none>" else paste(nm,         collapse = ", ")
+      stop(
+        paste0(
+          where, ": when `time_varying_betas = TRUE`, all time slices must have ",
+          "identical covariate layers (same names and order).\n",
+          "Mismatch at time index ", ii, ".\n",
+          "Expected: ", exp_str, "\n",
+          "Got     : ", got_str
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
+  invisible(TRUE)
+}
+

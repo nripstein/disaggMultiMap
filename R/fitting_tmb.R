@@ -9,6 +9,7 @@
 #' @param priors Optional named list of prior specifications (see internal helper).
 #' @param family One of 'gaussian', 'binomial', 'poisson', or 'negbinomial'.
 #' @param link One of 'identity', 'logit', or 'log'.
+#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
 #' @param iterations Integer >= 1: maximum number of optimizer iterations.
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
@@ -21,11 +22,11 @@
 #' @return An object of class 'disag_model_mmap_tmb' (a list with '$obj', '$opt',
 #'   '$sd_out', '$data', and '$model_setup').
 #' @export
-
 disag_model_mmap_tmb <- function(data,
                                  priors = NULL,
                                  family = 'poisson',
                                  link = 'log',
+                                 time_varying_betas = FALSE,
                                  iterations = 1000,
                                  field = TRUE,
                                  iid = TRUE,
@@ -46,6 +47,7 @@ disag_model_mmap_tmb <- function(data,
                                                  priors = priors,
                                                  family = family,
                                                  link = link,
+                                                 time_varying_betas = time_varying_betas,
                                                  field = field,
                                                  iid = iid,
                                                  silent = silent,
@@ -63,10 +65,19 @@ disag_model_mmap_tmb <- function(data,
   sd_out <- TMB::sdreport(obj, getJointPrecision = TRUE, hessian.fixed = hess)
 
   # Rename slope parameters to match covariate layer names (assuming all time points share the same names)
-  # TODO: change this to allow different covariates at different time points
-  cov_names <- names(data$covariate_rasters_list[[1]])
-  names(sd_out$par.fixed)[names(sd_out$par.fixed) == "slope"] <- cov_names
-  names(opt$par)[names(opt$par) == "slope"] <- cov_names
+  # cov_names <- names(data$covariate_rasters_list[[1]])
+  # names(sd_out$par.fixed)[names(sd_out$par.fixed) == "slope"] <- cov_names
+  # names(opt$par)[names(opt$par) == "slope"] <- cov_names
+
+  ## UPGRADED RENAMING:
+  coef_meta <- compute_coef_meta(data)
+  # Normalize names on sd_out$par.fixed and opt$par
+  if (!is.null(sd_out$par.fixed)) {
+    names(sd_out$par.fixed) <- normalize_fixed_names(names(sd_out$par.fixed), coef_meta, time_varying_betas)
+  }
+  if (!is.null(opt$par)) {
+    names(opt$par) <- normalize_fixed_names(names(opt$par), coef_meta, time_varying_betas)
+  }
 
   model_output <- list(obj = obj,
                        opt = opt,
