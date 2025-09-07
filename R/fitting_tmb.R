@@ -83,7 +83,12 @@ disag_model_mmap_tmb <- function(data,
                        opt = opt,
                        sd_out = sd_out,
                        data = data,
-                       model_setup = list(family = family, link = link, field = field, iid = iid))
+                       model_setup = list(family = family,
+                                          link = link,
+                                          field = field,
+                                          iid = iid,
+                                          time_varying_betas = time_varying_betas,
+                                          coef_meta = compute_coef_meta(data)))
 
   class(model_output) <- c("disag_model_mmap_tmb", "disag_model_mmap", "list")
 
