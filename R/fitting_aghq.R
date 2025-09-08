@@ -81,14 +81,54 @@ disag_model_mmap_aghq <- function(data,
   aghq_model <- rename_aghq_model_names(aghq_model, coef_meta, time_varying_betas)
 
   #-- 5. Assemble output --
+  # Build fixed-parameter order and beta index map for robust prediction
+  theta_order <- try(names(aghq_model$optresults$mode), silent = TRUE)
+  if (inherits(theta_order, "try-error")) theta_order <- NULL
+
+  beta_index_map <- NULL
+  if (!is.null(theta_order)) {
+    Tn <- length(data$time_points)
+    p  <- coef_meta$p
+    if (isTRUE(time_varying_betas)) {
+      # time-varying: intercept_t1..T, and cov_names with _t1..T
+      intercept_idx <- vapply(seq_len(Tn), function(t)
+        match(paste0("intercept_t", t), theta_order), integer(1))
+      if (p > 0L) {
+        slope_idx <- sapply(seq_len(Tn), function(t)
+          match(paste0(coef_meta$cov_names, "_t", t), theta_order), simplify = "matrix")
+        if (is.null(dim(slope_idx))) slope_idx <- matrix(slope_idx, nrow = p)
+      } else {
+        slope_idx <- matrix(integer(0), nrow = 0, ncol = Tn)
+      }
+      if (any(is.na(intercept_idx)) || (p > 0L && any(is.na(slope_idx)))) {
+        stop("Internal: could not map time-varying betas to theta order in AGHQ fit.")
+      }
+      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
+                             tv = TRUE, p = p, Tn = Tn)
+    } else {
+      # shared betas: 'intercept' and cov_names
+      intercept_idx <- match("intercept", theta_order)
+      if (is.na(intercept_idx)) stop("Internal: 'intercept' not found in theta order.")
+      slope_idx <- if (p > 0L) match(coef_meta$cov_names, theta_order) else integer(0)
+      if (p > 0L && any(is.na(slope_idx))) stop("Internal: some slope names not found in theta order.")
+      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
+                             tv = FALSE, p = p, Tn = Tn)
+    }
+  }
+
   out <- list(
     aghq_model = aghq_model,
+    obj = obj,
     data = data,
     model_setup = list(
       family = family,
       link   = link,
       field  = field,
-      iid    = iid
+      iid    = iid,
+      time_varying_betas = time_varying_betas,
+      coef_meta = coef_meta,
+      theta_order = theta_order,
+      beta_index_map = beta_index_map
     )
   )
   class(out) <- c("disag_model_mmap_aghq", "disag_model_mmap", "list")

@@ -76,6 +76,15 @@ rename_aghq_model_names <- function(aghq_model, coef_meta, time_varying_betas) {
         normalize_fixed_names(cn, coef_meta, time_varying_betas)
     }
   }
+
+  # 4) Normalized posterior thetanames (ordering for samples)
+  if (!is.null(aghq_model$normalized_posterior)) {
+    tn <- try(aghq_model$normalized_posterior$thetanames, silent = TRUE)
+    if (!inherits(tn, "try-error") && !is.null(tn)) {
+      aghq_model$normalized_posterior$thetanames <-
+        normalize_fixed_names(tn, coef_meta, time_varying_betas)
+    }
+  }
   return(aghq_model)
 }
 
@@ -115,15 +124,15 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
   }
 
   # Time-varying case
-  # Intercepts
+  # Intercepts (match variants: intercept_t, intercept_t1, intercept_t.1, intercept_t[1])
   if (!is.na(Tn) && Tn > 0L) {
-    idx_i <- which(grepl("^intercept_t(\\[|\\.|$|[0-9]+$)?", old_names))
+    idx_i <- which(grepl("^intercept_t(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", old_names))
     if (length(idx_i) == Tn) new[idx_i] <- paste0("intercept_t", seq_len(Tn))
   }
 
-  # Slopes
+  # Slopes (match variants: slope_t, slope_t1, slope_t.1, slope_t[1])
   if (p > 0L && !is.na(Tn) && Tn > 0L) {
-    idx_s <- which(grepl("^slope_t(\\[|\\.|$|[0-9]+$)?", old_names))
+    idx_s <- which(grepl("^slope_t(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", old_names))
     if (length(idx_s) == p * Tn) {
       tv_names <- as.vector(vapply(seq_len(Tn), function(t) paste0(cvs, "_t", t), character(p)))
       new[idx_s] <- tv_names
