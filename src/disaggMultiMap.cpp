@@ -192,38 +192,17 @@ Type objective_function<Type>::operator()()
     nll += SCALE(GMRF(Q), sigma / scaling_factor)(nodemean);
   }
 
-  // if(family==3) { // old PC prior
-  //   Type lambda = -log(prior_iideffect_sd_prob)
-  //                 / prior_iideffect_sd_max;
-  //     // log π(η) = log(λ/2) + 0.5·η − λ·exp(η/2)
-  //     Type log_pcdensity_nb =
-  //         log(lambda / Type(2.0))
-  //       + Type(0.5) * iideffect_log_tau
-  //       - lambda * exp(iideffect_log_tau * Type(0.5));
-  //     nll -= log_pcdensity_nb;
-  // }
 
-  // if (family == 3) {  // NB PC prior   AUG 1
-  //   Type tau_nb = exp(iideffect_log_tau);
-
-  //   // PC‐prior on tau = exp(iideffect_log_tau), tail P(τ>τ_max)=p_tail
+  // if (family == 3) { // NB PC prior in log-tau space AUG 24
   //   Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
-    
-  //   nll += log(Type(2.0)) + lambda_nb * sqrt(tau_nb) + Type(0.5) * log(tau_nb) - log(lambda_nb);
-  //   //jacobian
-  //   nll -= iideffect_log_tau;
+
+  //   // log pi(log_tau) = log(lambda/2) + 0.5*log_tau - lambda*exp(log_tau/2)
+  //   Type log_pi_logtau = log(lambda_nb / Type(2.0))
+  //                      + Type(0.5) * iideffect_log_tau
+  //                      - lambda_nb * exp(iideffect_log_tau / Type(2.0));
+
+  //   nll -= log_pi_logtau; 
   // }
-
-  if (family == 3) { // NB PC prior in log-tau space AUG 24
-    Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max;
-
-    // log pi(log_tau) = log(lambda/2) + 0.5*log_tau - lambda*exp(log_tau/2)
-    Type log_pi_logtau = log(lambda_nb / Type(2.0))
-                       + Type(0.5) * iideffect_log_tau
-                       - lambda_nb * exp(iideffect_log_tau / Type(2.0));
-
-    nll -= log_pi_logtau; 
-  }
 
   if (family == 3) { // Exponential PC prior on tau using tau^2 AUG 25
     Type lambda_nb = -log(prior_iideffect_sd_prob) / prior_iideffect_sd_max; 
