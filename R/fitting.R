@@ -9,7 +9,7 @@ disag_model_mmap <- function(data,
                              link   = "log",
                              engine = c("AGHQ","TMB"),
                              time_varying_betas = FALSE,
-                             k = 3, # AGHQ‑only argument
+                             aghq_k = 2, # AGHQ‑only argument
                              field           = TRUE,
                              iid             = TRUE,
                              silent          = TRUE,
@@ -20,32 +20,32 @@ disag_model_mmap <- function(data,
   engine <- match.arg(engine)
   if (engine == "AGHQ") {
     disag_model_mmap_aghq(
-      data            = data,
-      priors          = priors,
-      family          = family,
-      link            = link,
+      data               = data,
+      priors             = priors,
+      family             = family,
+      link               = link,
       time_varying_betas = time_varying_betas,
-      k               = k,
-      field           = field,
-      iid             = iid,
-      silent          = silent,
-      starting_values = starting_values,
-      optimizer       = optimizer,
-      verbose         = verbose,
+      aghq_k             = aghq_k,
+      field              = field,
+      iid                = iid,
+      silent             = silent,
+      starting_values    = starting_values,
+      optimizer          = optimizer,
+      verbose            = verbose,
       ...
     )
   } else {
     disag_model_mmap_tmb(
-      data            = data,
-      priors          = priors,
-      family          = family,
-      link            = link,
+      data               = data,
+      priors             = priors,
+      family             = family,
+      link               = link,
       time_varying_betas = time_varying_betas,
-      field           = field,
-      iid             = iid,
-      silent          = silent,
-      starting_values = starting_values,
-      verbose         = verbose,
+      field              = field,
+      iid                = iid,
+      silent             = silent,
+      starting_values    = starting_values,
+      verbose            = verbose,
       ...
     )
   }

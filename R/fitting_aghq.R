@@ -9,7 +9,7 @@
 #' @param family One of "gaussian", "binomial", "poisson", or "negbinomial".
 #' @param link One of "identity", "logit", or "log".
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
-#' @param k Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).
+#' @param aghq_k Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
 #' @param silent Logical: if TRUE, suppress TMB's console output.
@@ -22,7 +22,7 @@ disag_model_mmap_aghq <- function(data,
                                   family = "poisson",
                                   link = "log",
                                   time_varying_betas = FALSE,
-                                  k = 1,
+                                  aghq_k = 1,
                                   field = TRUE,
                                   iid = TRUE,
                                   silent = TRUE,
@@ -71,7 +71,7 @@ disag_model_mmap_aghq <- function(data,
   message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,
-    k             = k,
+    k             = aghq_k,
     startingvalue = obj$par,
     control       = control
   )
@@ -80,7 +80,11 @@ disag_model_mmap_aghq <- function(data,
   coef_meta  <- compute_coef_meta(data)
   aghq_model <- rename_aghq_model_names(aghq_model, coef_meta, time_varying_betas)
 
-  #-- 5. Assemble output --
+  #-- 5. (Optional) Extract random-effect mode via sdreport for later prediction
+  sd_out <- NULL
+  try({ sd_out <- TMB::sdreport(obj) }, silent = TRUE)
+
+  #-- 6. Assemble output --
   # Build fixed-parameter order and beta index map for robust prediction
   theta_order <- try(names(aghq_model$optresults$mode), silent = TRUE)
   if (inherits(theta_order, "try-error")) theta_order <- NULL
@@ -120,6 +124,7 @@ disag_model_mmap_aghq <- function(data,
     aghq_model = aghq_model,
     obj = obj,
     data = data,
+    sd_out = sd_out,
     model_setup = list(
       family = family,
       link   = link,
@@ -133,7 +138,7 @@ disag_model_mmap_aghq <- function(data,
   )
   class(out) <- c("disag_model_mmap_aghq", "disag_model_mmap", "list")
 
-  #-- 6. Runtime message --
+  #-- 7. Runtime message --
   if (verbose) {
     elapsed <- difftime(Sys.time(), start_time, units = "mins")
     message(sprintf("disag_model_mmap_aghq() runtime: %.2f minutes", as.numeric(elapsed)))
