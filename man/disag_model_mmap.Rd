@@ -10,17 +10,21 @@ disag_model_mmap(
   family = "poisson",
   link = "log",
   engine = c("AGHQ", "TMB"),
-  k = 3,
+  time_varying_betas = FALSE,
+  aghq_k = 2,
   field = TRUE,
   iid = TRUE,
   silent = TRUE,
   starting_values = NULL,
+  optimizer = NULL,
   verbose = FALSE,
   ...
 )
 }
 \arguments{
 \item{engine}{Character; either "AGHQ" or "TMB"}
+
+\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
 }
 \description{
 Fit a multi‑map disaggregation model (via AGHQ or TMB)

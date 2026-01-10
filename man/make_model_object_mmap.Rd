@@ -9,10 +9,12 @@ make_model_object_mmap(
   priors = NULL,
   family = "gaussian",
   link = "identity",
+  time_varying_betas = FALSE,
   field = TRUE,
   iid = TRUE,
   silent = TRUE,
   starting_values = NULL,
+  optimizer = NULL,
   verbose = FALSE
 )
 }
@@ -25,6 +27,8 @@ make_model_object_mmap(
 
 \item{link}{One of "identity", "logit", "log".}
 
+\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
 \item{field}{Logical: include spatial field?}
 
 \item{iid}{Logical: include IID polygon effects?}
@@ -32,6 +36,10 @@ make_model_object_mmap(
 \item{silent}{Logical: pass to 'MakeADFun()' to suppress output.}
 
 \item{starting_values}{NULL or named list of starting values.}
+
+\item{optimizer}{Optional; For changing the arguments used in AGHQ.}
+
+\item{verbose}{Logical: if TRUE, print details throughout including runtime.}
 }
 \value{
 A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
@@ -40,4 +48,4 @@ A 'TMB::ADFun' object ready for 'marginal_laplace_tmb()'.
 Internal helper. Converts data, priors, and model settings into the list
 of inputs required by 'TMB::MakeADFun()'.
 }
-\keyword{internal}
+\keyword{external}

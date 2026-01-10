@@ -4,9 +4,19 @@
 \alias{get_predict_matrices}
 \title{Construct design and projection matrices for prediction}
 \usage{
-get_predict_matrices(data, new_data = NULL)
+get_predict_matrices(
+  data,
+  new_data = NULL,
+  expected_cov_names = NULL,
+  time_varying_betas = FALSE
+)
 
-get_predict_matrices(data, new_data = NULL)
+get_predict_matrices(
+  data,
+  new_data = NULL,
+  expected_cov_names = NULL,
+  time_varying_betas = FALSE
+)
 }
 \arguments{
 \item{data}{A 'disag_data_mmap' object (from 'prepare_data_mmap()').}
@@ -14,6 +24,11 @@ get_predict_matrices(data, new_data = NULL)
 \item{new_data}{Optional new covariate data:
 - a single 'SpatRaster' (recycled across all times), or
 - a list of length 'length(data$time_points)' of 'SpatRaster' objects.}
+
+\item{expected_cov_names}{Character vector of training covariate names (order matters).
+If length 0, predictions are intercept-only regardless of provided rasters.}
+
+\item{time_varying_betas}{Logical; used for clearer error messages when aligning layers.}
 }
 \value{
 A list with elements:
