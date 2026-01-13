@@ -68,7 +68,7 @@ disag_model_mmap_aghq <- function(data,
 
   #-- 4. Run AGHQ --
 
-  message("Fitting ", family," disaggregation model via AGHQ (k = ", k, ").")
+  message("Fitting ", family," disaggregation model via AGHQ (k = ", aghq_k, ").")
   aghq_model <- aghq::marginal_laplace_tmb(
     obj,
     k             = aghq_k,
