@@ -9,6 +9,7 @@ disag_model_mmap_tmb(
   priors = NULL,
   family = "poisson",
   link = "log",
+  time_varying_betas = FALSE,
   iterations = 1000,
   field = TRUE,
   iid = TRUE,
@@ -27,6 +28,8 @@ disag_model_mmap_tmb(
 \item{family}{One of 'gaussian', 'binomial', 'poisson', or 'negbinomial'.}
 
 \item{link}{One of 'identity', 'logit', or 'log'.}
+
+\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
 
 \item{iterations}{Integer >= 1: maximum number of optimizer iterations.}
 

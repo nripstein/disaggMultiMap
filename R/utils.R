@@ -1,3 +1,80 @@
+#' Get Default Prior Values for Disaggregation Model
+#'
+#' @description
+#' Calculates the default Penalized Complexity (PC) prior parameters and Gaussian
+#' priors that will be used by \code{disag_model_mmap()} if the user does not
+#' provide overrides.
+#'
+#' @details
+#' The default priors are dynamic and depend on the input data:
+#' \itemize{
+#'   \item \strong{Range (Rho):} The lower bound \code{prior_rho_min} is set to
+#'   1/3 of the diagonal length of the study area's bounding box.
+#'   \item \strong{Spatial SD (Sigma):} The upper bound \code{prior_sigma_max}
+#'   is set to the coefficient of variation of the polygon response counts.
+#' }
+#'
+#' @param data A \code{disag_data_mmap} object (output from \code{prepare_data_mmap}).
+#'
+#' @return A named list of prior specifications.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Check defaults before fitting
+#' defaults <- get_priors(my_data)
+#' print(defaults)
+#'
+#' # Use defaults as a base to modify specific values
+#' my_priors <- defaults
+#' my_priors$prior_rho_prob <- 0.05 # Stricter probability
+#' fit <- disag_model_mmap(my_data, priors = my_priors)
+#' }
+#' @keywords external
+get_priors <- function(data) {
+
+  if (!inherits(data, "disag_data_mmap")) {
+    stop("Input 'data' must be a 'disag_data_mmap' object created by prepare_data_mmap().")
+  }
+
+  # 1. Calculate dynamic Rho (Range) lower bound
+  bbox <- sf::st_bbox(data$polygon_shapefile_list[[1]])
+  diag_len <- sqrt((bbox$xmax - bbox$xmin)^2 + (bbox$ymax - bbox$ymin)^2)
+  calc_rho_min <- diag_len / 3
+
+  # 2. Calculate dynamic Sigma (SD) upper bound
+  resp <- data$polygon_data$response
+  # Handle edge case where mean is 0 to avoid Inf
+  if (mean(resp, na.rm = TRUE) == 0) {
+    calc_sigma_max <- 1.0
+  } else {
+    calc_sigma_max <- sd(resp / mean(resp, na.rm = TRUE), na.rm = TRUE)
+  }
+
+  # 3. Assemble the full list of defaults
+  # These match the hardcoded values in make_model_object_mmap
+  priors <- list(
+    # Intercepts & Slopes
+    priormean_intercept     = 0.0,
+    priorsd_intercept       = 10.0,
+    priormean_slope         = 0.0,
+    priorsd_slope           = 0.5,
+
+    # Spatial Field (PC Priors)
+    prior_rho_min           = calc_rho_min,
+    prior_rho_prob          = 0.1,  # 10% prob range is smaller than rho_min
+
+    prior_sigma_max         = calc_sigma_max,
+    prior_sigma_prob        = 0.1,  # 10% prob sigma is larger than sigma_max
+
+    # IID / Negative Binomial Dispersion (PC Priors)
+    prior_iideffect_sd_max  = 0.1,  # Default assumes small extra variance
+    prior_iideffect_sd_prob = 0.01  # 1% prob SD is larger than 0.1
+  )
+
+  return(priors)
+}
+
 #' Compute coefficient metadata (number of timepoints, covariates, and their names)
 #' @param data A disag_data_mmap object.
 #' @keywords internal
@@ -76,6 +153,15 @@ rename_aghq_model_names <- function(aghq_model, coef_meta, time_varying_betas) {
         normalize_fixed_names(cn, coef_meta, time_varying_betas)
     }
   }
+
+  # 4) Normalized posterior thetanames (ordering for samples)
+  if (!is.null(aghq_model$normalized_posterior)) {
+    tn <- try(aghq_model$normalized_posterior$thetanames, silent = TRUE)
+    if (!inherits(tn, "try-error") && !is.null(tn)) {
+      aghq_model$normalized_posterior$thetanames <-
+        normalize_fixed_names(tn, coef_meta, time_varying_betas)
+    }
+  }
   return(aghq_model)
 }
 
@@ -115,15 +201,15 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
   }
 
   # Time-varying case
-  # Intercepts
+  # Intercepts (match variants: intercept_t, intercept_t1, intercept_t.1, intercept_t[1])
   if (!is.na(Tn) && Tn > 0L) {
-    idx_i <- which(grepl("^intercept_t(\\[|\\.|$|[0-9]+$)?", old_names))
+    idx_i <- which(grepl("^intercept_t(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", old_names))
     if (length(idx_i) == Tn) new[idx_i] <- paste0("intercept_t", seq_len(Tn))
   }
 
-  # Slopes
+  # Slopes (match variants: slope_t, slope_t1, slope_t.1, slope_t[1])
   if (p > 0L && !is.na(Tn) && Tn > 0L) {
-    idx_s <- which(grepl("^slope_t(\\[|\\.|$|[0-9]+$)?", old_names))
+    idx_s <- which(grepl("^slope_t(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", old_names))
     if (length(idx_s) == p * Tn) {
       tv_names <- as.vector(vapply(seq_len(Tn), function(t) paste0(cvs, "_t", t), character(p)))
       new[idx_s] <- tv_names

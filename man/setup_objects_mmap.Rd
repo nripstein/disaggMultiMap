@@ -4,7 +4,13 @@
 \alias{setup_objects_mmap}
 \title{Prepare prediction objects for multi-map disaggregation (TMB)}
 \usage{
-setup_objects_mmap(model_output, new_data = NULL, predict_iid = FALSE)
+setup_objects_mmap(
+  model_output,
+  new_data = NULL,
+  predict_iid = FALSE,
+  time_index = NULL,
+  use_training = FALSE
+)
 }
 \arguments{
 \item{model_output}{A 'disag_model_mmap_tmb' model fit.}

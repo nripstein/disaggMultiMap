@@ -9,11 +9,13 @@ disag_model_mmap_aghq(
   priors = NULL,
   family = "poisson",
   link = "log",
-  k = 1,
+  time_varying_betas = FALSE,
+  aghq_k = 1,
   field = TRUE,
   iid = TRUE,
   silent = TRUE,
   starting_values = NULL,
+  optimizer = NULL,
   verbose = FALSE
 )
 }
@@ -26,7 +28,9 @@ disag_model_mmap_aghq(
 
 \item{link}{One of "identity", "logit", or "log".}
 
-\item{k}{Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).}
+\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
+\item{aghq_k}{Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).}
 
 \item{field}{Logical: include the spatial random field?}
 
