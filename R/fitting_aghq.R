@@ -57,9 +57,9 @@ disag_model_mmap_aghq <- function(data,
   if (is.null(optimizer)) {
     optimizer <- "BFGS"
   }
-  if (!optimizer %in% c("BFGS", "sparse_trust", "trust")) {
-    stop("`optimizer` must be one of 'BFGS', 'sparse_trust', or 'trust'.")
-  }
+  # if (!optimizer %in% c("BFGS", "sparse_trust", "trust")) {
+  #   stop("`optimizer` must be one of 'BFGS', 'sparse_trust', or 'trust'.")
+  # }
   if (verbose) {
     message("Using optimizer: ", optimizer)
   }
@@ -80,7 +80,7 @@ disag_model_mmap_aghq <- function(data,
   coef_meta  <- compute_coef_meta(data)
   aghq_model <- rename_aghq_model_names(aghq_model, coef_meta, time_varying_betas)
 
-  #-- 5. (Optional) Extract random-effect mode via sdreport for later prediction
+  #-- 5. Extract random-effect mode via sdreport for later prediction
   sd_out <- NULL
   try({ sd_out <- TMB::sdreport(obj) }, silent = TRUE)
 
