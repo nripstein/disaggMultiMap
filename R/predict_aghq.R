@@ -311,7 +311,8 @@ predict.disag_model_mmap_aghq <- function(object,
   #-- Assemble final output --
   pred_stack <- do.call(c, mean_preds)
   cov_stack  <- do.call(c, mean_covs)
-  field_stack <- NULL
+  # Stack field if available
+  field_stack <- if (!all(vapply(mean_fields, is.null, logical(1)))) do.call(c, mean_fields) else NULL
   mean_prediction <- list(
     prediction = pred_stack,
     field      = field_stack,

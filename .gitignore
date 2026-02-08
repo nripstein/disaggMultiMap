@@ -3,6 +3,13 @@
 .RData
 .Ruserdata
 
+# Local context/docs
+/LGCP_paper__v2_.pdf
+/AGENTS.md
+/CODEX_CONTEXT.md
+/MINIMAL_PUBLISHABLE_CHECKLIST.MD
+/MINIMAL_PUBLISHABLE_CHECKLIST.md
+
 # macOS
 .DS_Store
 
@@ -10,6 +17,8 @@
 *.o
 *.so
 *.prof
+/src/disaggMultiMap.o
+/src/disaggMultiMap.so
 
 # testthat helpers
 tests/testthat/.DS_Store
