@@ -22,12 +22,14 @@ Depends: TMB, RcppEigen
 LinkingTo: TMB, RcppEigen
 Imports: 
     aghq,
+    cowplot,
     disaggregation,
     fmesher,
     ggplot2,
     Matrix,
     rSPDE,
     sf,
+    sparseMVN,
     terra,
     TMB
 Suggests: 
