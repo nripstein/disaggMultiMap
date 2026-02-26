@@ -87,7 +87,14 @@ compute_coef_meta <- function(data) {
        cov_names = cov_names)
 }
 
-#' @description Normalize fixed-effect parameter names to consistent labels
+#' Normalize fixed-effect parameter names
+#'
+#' @description
+#' Normalize fixed-effect parameter names to consistent labels.
+#' @param nm Character vector of parameter names.
+#' @param coef_meta List with coefficient metadata from `compute_coef_meta()`.
+#' @param time_varying_betas Logical indicating whether time-varying betas are used.
+#' @return Character vector of normalized parameter names.
 #' @keywords internal
 normalize_fixed_names <- function(nm, coef_meta, time_varying_betas) {
   if (is.null(nm)) return(nm)
@@ -118,9 +125,16 @@ normalize_fixed_names <- function(nm, coef_meta, time_varying_betas) {
 }
 
 
-#' @description Rename parameter entries in an AGHQ model object (marginals,
-#'   optimizer outputs, modes, Hessians) using canonicalized names based on
-#'   coefficient metadata and time-varying structure.
+#' Rename AGHQ model parameter names
+#'
+#' @description
+#' Rename parameter entries in an AGHQ model object (marginals, optimizer
+#' outputs, modes, Hessians) using canonicalized names based on coefficient
+#' metadata and time-varying structure.
+#' @param aghq_model Fitted AGHQ model object.
+#' @param coef_meta List with coefficient metadata from `compute_coef_meta()`.
+#' @param time_varying_betas Logical indicating whether time-varying betas are used.
+#' @return AGHQ model object with normalized parameter names in key components.
 #' @keywords internal
 rename_aghq_model_names <- function(aghq_model, coef_meta, time_varying_betas) {
   # 1) 1D marginals (this is what aghq::summary() displays)
@@ -166,8 +180,16 @@ rename_aghq_model_names <- function(aghq_model, coef_meta, time_varying_betas) {
 }
 
 
-#' @description Canonicalize parameter draw names for consistency across
-#'   shared vs. time-varying intercepts/slopes while leaving random effects and hyperparameters unchanged.
+#' Canonicalize posterior draw parameter names
+#'
+#' @description
+#' Canonicalize parameter draw names for consistency across shared vs.
+#' time-varying intercepts/slopes while leaving random effects and
+#' hyperparameters unchanged.
+#' @param old_names Character vector of draw names.
+#' @param coef_meta List with coefficient metadata from `compute_coef_meta()`.
+#' @param time_varying_betas Logical indicating whether time-varying betas are used.
+#' @return Character vector of canonicalized draw names.
 #' @keywords internal
 canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
   # Defensive defaults
