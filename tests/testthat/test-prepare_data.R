@@ -1,40 +1,28 @@
-test_that("prepare_data_mmap function works as expected", {
+test_that("prepare_data_mmap basic structure works as expected", {
+  result <- get_cached_prepared_data("prep_default_mesh")
 
-  result <- prepare_data_mmap(
-    polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
-    covariate_rasters_list = test_data_mmap$covariate_rasters_list,
-    aggregation_rasters_list = test_data_mmap$aggregation_rasters_list
-  )
-
-  # Use modern validation function
   validate_disag_data_mmap_structure(
     result,
     expected_times = test_data_mmap$n_times,
-    expected_polygons = test_data_mmap$n_polygons
+    expected_polygons_total = test_data_mmap$n_polygons * test_data_mmap$n_times
   )
-
-  # Check temporal consistency
   validate_temporal_consistency(result)
+  expect_equal(result$time_points, seq_len(test_data_mmap$n_times))
 })
 
-test_that("prepare_data_mmap function with sample size works as expected", {
+test_that("prepare_data_mmap with sample size works as expected", {
+  result <- get_cached_prepared_data("prep_binomial_no_mesh")
 
-  result <- prepare_data_mmap(
-    polygon_shapefile_list = test_data_mmap_binomial$polygon_shapefile_list,
-    covariate_rasters_list = test_data_mmap_binomial$covariate_rasters_list,
-    aggregation_rasters_list = test_data_mmap_binomial$aggregation_rasters_list,
-    sample_size_var = 'sample_size',
-    make_mesh = FALSE
+  validate_disag_data_mmap_structure(
+    result,
+    expected_times = test_data_mmap_binomial$n_times,
+    expected_polygons_total = test_data_mmap_binomial$n_polygons * test_data_mmap_binomial$n_times
   )
-
-  validate_disag_data_mmap_structure(result)
   expect_true(is.null(result$mesh))
   expect_equal(sum(is.na(result$polygon_data$N)), 0)
 })
 
-test_that("prepare_data_mmap function deals with NAs as expected", {
-
-  # Should error without na_action
+test_that("prepare_data_mmap handles NAs as expected", {
   expect_error(
     prepare_data_mmap(
       polygon_shapefile_list = test_data_mmap_nas$polygon_shapefile_list,
@@ -43,43 +31,30 @@ test_that("prepare_data_mmap function deals with NAs as expected", {
     )
   )
 
-  # Should work with na_action = TRUE
-  result <- prepare_data_mmap(
-    polygon_shapefile_list = test_data_mmap_nas$polygon_shapefile_list,
-    covariate_rasters_list = test_data_mmap_nas$covariate_rasters_list,
-    aggregation_rasters_list = test_data_mmap_nas$aggregation_rasters_list,
-    na_action = TRUE,
-    make_mesh = FALSE
-  )
+  result <- get_cached_prepared_data("prep_na_no_mesh")
 
-  validate_disag_data_mmap_structure(result)
+  validate_disag_data_mmap_structure(result, expected_times = test_data_mmap_nas$n_times)
+  expect_true(is.null(result$mesh))
   expect_equal(sum(is.na(result$polygon_data$response)), 0)
   expect_equal(sum(is.na(result$covariate_data)), 0)
   expect_equal(sum(is.na(result$aggregation_pixels)), 0)
 })
 
 test_that("prepare_data_mmap handles categorical covariates correctly", {
+  result <- get_cached_prepared_data("prep_categorical_mesh")
 
-  result <- prepare_data_mmap(
-    polygon_shapefile_list = test_data_mmap_categorical$polygon_shapefile_list,
-    covariate_rasters_list = test_data_mmap_categorical$covariate_rasters_list,
-    aggregation_rasters_list = test_data_mmap_categorical$aggregation_rasters_list,
-    categorical_covariate_baselines = list(landuse = "urban")
-  )
-
-  validate_disag_data_mmap_structure(result)
-
-  # Check categorical encoding
+  validate_disag_data_mmap_structure(result, expected_times = test_data_mmap_categorical$n_times)
+  expect_equal(result$categorical_covariate_baselines$landuse, "urban")
+  expect_true("landuse" %in% names(result$categorical_covariate_schema))
   validate_categorical_encoding(
-    result$covariate_data,
-    c("urban", "rural", "forest"),
-    "urban"
+    covariate_data = result$covariate_data,
+    levels_all = c("urban", "rural", "forest"),
+    baseline = "urban",
+    layer_name = "landuse"
   )
 })
 
-test_that("prepare_data_mmap validates multi-map inputs correctly", {
-
-  # Test mismatched list lengths
+test_that("prepare_data_mmap validates multi-map inputs", {
   expect_error(
     prepare_data_mmap(
       polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
@@ -88,7 +63,6 @@ test_that("prepare_data_mmap validates multi-map inputs correctly", {
     )
   )
 
-  # Test wrong object types
   expect_error(
     prepare_data_mmap(
       polygon_shapefile_list = list("not_sf", "objects"),
@@ -99,25 +73,16 @@ test_that("prepare_data_mmap validates multi-map inputs correctly", {
 })
 
 test_that("prepare_data_mmap works without covariates", {
+  result <- get_cached_prepared_data("prep_nocov_no_mesh")
 
-  result <- prepare_data_mmap(
-    polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
-    covariate_rasters_list = NULL,
-    aggregation_rasters_list = test_data_mmap$aggregation_rasters_list,
-    make_mesh = FALSE
-  )
-
-  validate_disag_data_mmap_structure(result)
-  expect_null(result$covariate_rasters_list)
-
-  # Should only have ID columns and aggregation in covariate_data
-  expected_cols <- c("ID", "cell", "poly_local_id", "time")
-  expect_setequal(names(result$covariate_data), expected_cols)
+  validate_disag_data_mmap_structure(result, expected_times = test_data_mmap$n_times)
+  expect_true(all(vapply(result$covariate_rasters_list, is.null, logical(1))))
+  expect_true(is.null(result$mesh))
+  expect_setequal(names(result$covariate_data), c("ID", "cell", "poly_local_id", "time"))
 })
 
-test_that("getStartendindex_mmap helper function works correctly", {
-
-  # Create simple test data
+test_that("getStartendindex_mmap helper works correctly", {
+  set.seed(42)
   covariates <- data.frame(
     poly_local_id = c(1, 1, 1, 2, 2, 3, 3, 3, 3),
     cell = 1:9,
@@ -135,8 +100,5 @@ test_that("getStartendindex_mmap helper function works correctly", {
   expect_true(is.matrix(result))
   expect_equal(nrow(result), nrow(polygon_data))
   expect_equal(ncol(result), 2)
-
-  # Check 0-indexing (C++ style)
-  expected_matrix <- matrix(c(0, 3, 5, 2, 4, 8), nrow = 3, ncol = 2)
-  expect_equal(result, expected_matrix)
+  expect_equal(result, matrix(c(0, 3, 5, 2, 4, 8), nrow = 3, ncol = 2))
 })
