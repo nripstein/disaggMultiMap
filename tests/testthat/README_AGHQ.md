@@ -1,47 +1,47 @@
 # AGHQ Test Context
 
-This repository includes a gated AGHQ smoke test:
+AGHQ tests are split into two groups:
 
-- [test-aghq-gated.R](/home/nripstein/code/disaggMultiMap/tests/testthat/test-aghq-gated.R)
+- [test-aghq-fast.R](/home/nripstein/code/disaggMultiMap/tests/testthat/test-aghq-fast.R): always on, fast argument-validation checks (no AGHQ fitting).
+- [test-aghq-gated.R](/home/nripstein/code/disaggMultiMap/tests/testthat/test-aghq-gated.R): heavy fit/predict contract and regression checks.
 
-It is skipped by default so AGHQ instability does not block the main test suite.
+## Default Behavior
+
+Heavy AGHQ tests are enabled by default.
+
+To opt out of heavy AGHQ tests, set `RUN_AGHQ_TESTS=false`.
 
 ## Run AGHQ Tests
 
-```bash
-RUN_AGHQ_TESTS=true Rscript -e "devtools::load_all('.'); testthat::test_file('tests/testthat/test-aghq-gated.R', reporter='summary')"
-```
-
-Or run full suite with AGHQ enabled:
+Run just heavy AGHQ tests:
 
 ```bash
-RUN_AGHQ_TESTS=true Rscript -e "devtools::load_all('.'); testthat::test_dir('tests/testthat', reporter='summary')"
+Rscript -e "devtools::load_all('.'); testthat::test_file('tests/testthat/test-aghq-gated.R', reporter='summary')"
 ```
 
-## Why Tests Are Gated
+Run full suite (includes heavy AGHQ tests by default):
 
-AGHQ fit/predict behavior is currently less stable than the TMB path in this codebase (naming/order and optimizer-path issues can trigger run-specific failures).  
-The gate keeps default CI/dev feedback fast and reliable while AGHQ support is being hardened.
+```bash
+Rscript -e "devtools::load_all('.'); testthat::test_dir('tests/testthat', reporter='summary')"
+```
 
-## Next Steps For AGHQ Test Development
+Run full suite with heavy AGHQ tests disabled:
 
-1. Stabilize a canonical AGHQ fit fixture (small deterministic data, known optimizer settings).
-2. Add robust fit contract checks:
-- class and required list members
-- `model_setup` fields (`family`, `link`, `time_varying_betas`)
-3. Add predict smoke checks with `predict_iid = FALSE`:
-- output class
-- mean and CI layer counts matching `n_times`
-4. Add explicit checks for known limitations:
-- field uncertainty currently mode-conditional
-- IID prediction unsupported in AGHQ path
-5. Ungate AGHQ tests only after repeated green runs in local and CI-like environments.
+```bash
+RUN_AGHQ_TESTS=false Rscript -e "devtools::load_all('.'); testthat::test_dir('tests/testthat', reporter='summary')"
+```
 
-## Promotion Criteria (Ungating)
+## Current Gated Coverage
 
-Use all of the following before moving AGHQ tests into default pass criteria:
+1. AGHQ fit object contract on a deterministic one-covariate fixture.
+2. AGHQ predict output contract for `predict_iid = FALSE`.
+3. `new_data` covariate-name alignment validation.
+4. Explicit regression assertion for the known shared-betas/two-covariate fit failure:
+`Internal: some slope names not found in theta order.`
+
+## Promotion Criteria (Ungating Heavy AGHQ Tests)
 
 1. No intermittent failures across repeated runs (for example, 10 consecutive runs).
-2. Stable parameter-name mapping for draw extraction across supported model setups.
-3. Runtime acceptable for default suite budget.
-4. Clear error messages for unsupported AGHQ options.
+2. Stable fixed-effect name mapping across shared and time-varying beta configurations.
+3. Runtime within default test-suite budget.
+4. Clear and stable error contracts for unsupported options.

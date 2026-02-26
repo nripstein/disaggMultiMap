@@ -160,6 +160,8 @@ make_fixture_fit_tmb <- function(seed = 10L,
 
 .mmap_fit_cache <- new.env(parent = emptyenv())
 .mmap_prepare_cache <- new.env(parent = emptyenv())
+.mmap_aghq_prepare_cache <- new.env(parent = emptyenv())
+.mmap_aghq_fit_cache <- new.env(parent = emptyenv())
 
 get_cached_prepared_data <- function(name = c(
                                        "prep_default_mesh",
@@ -282,6 +284,80 @@ get_core_nofield_fit <- function() {
     iid = FALSE,
     time_varying_betas = FALSE
   )
+}
+
+get_cached_aghq_prepared_data <- function(name = c(
+                                            "aghq_small_onecov_mesh",
+                                            "aghq_small_twocov_mesh"
+                                          )) {
+  name <- match.arg(name)
+  if (exists(name, envir = .mmap_aghq_prepare_cache, inherits = FALSE)) {
+    return(get(name, envir = .mmap_aghq_prepare_cache, inherits = FALSE))
+  }
+
+  fixture <- make_fixture_fit_tmb(
+    seed = 51L,
+    n_times = 2,
+    n_polygon_per_side = 3,
+    n_pixels_per_side = 6
+  )
+
+  prepared <- switch(
+    name,
+    aghq_small_onecov_mesh = {
+      cov_one <- lapply(fixture$covariate_rasters_list, function(r) r[[1]])
+      prepare_data_mmap(
+        polygon_shapefile_list = fixture$polygon_shapefile_list,
+        covariate_rasters_list = cov_one,
+        aggregation_rasters_list = fixture$aggregation_rasters_list,
+        make_mesh = TRUE
+      )
+    },
+    aghq_small_twocov_mesh = prepare_data_mmap(
+      polygon_shapefile_list = fixture$polygon_shapefile_list,
+      covariate_rasters_list = fixture$covariate_rasters_list,
+      aggregation_rasters_list = fixture$aggregation_rasters_list,
+      make_mesh = TRUE
+    )
+  )
+
+  assign(name, prepared, envir = .mmap_aghq_prepare_cache)
+  prepared
+}
+
+get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
+                                aghq_k = 1,
+                                optimizer = "BFGS",
+                                field = TRUE,
+                                iid = TRUE,
+                                time_varying_betas = FALSE) {
+  key <- paste(name, aghq_k, optimizer, field, iid, time_varying_betas, sep = "|")
+  if (exists(key, envir = .mmap_aghq_fit_cache, inherits = FALSE)) {
+    return(get(key, envir = .mmap_aghq_fit_cache, inherits = FALSE))
+  }
+
+  prepared <- switch(
+    name,
+    aghq_small_onecov_shared = get_cached_aghq_prepared_data("aghq_small_onecov_mesh"),
+    stop("Unknown AGHQ fit fixture name: ", name)
+  )
+
+  fit <- disag_model_mmap(
+    data = prepared,
+    engine = "AGHQ",
+    family = "poisson",
+    link = "log",
+    aghq_k = aghq_k,
+    field = field,
+    iid = iid,
+    time_varying_betas = time_varying_betas,
+    silent = TRUE,
+    optimizer = optimizer
+  )
+
+  out <- list(data = prepared, fit = fit)
+  assign(key, out, envir = .mmap_aghq_fit_cache)
+  out
 }
 
 # Baseline fixtures used in prepare-data tests
