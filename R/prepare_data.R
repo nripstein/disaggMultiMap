@@ -8,14 +8,16 @@
 #' @param aggregation_rasters_list Optional list of 'SpatRaster'; if NULL, uses uniform counts.
 #' @param id_var Name of the polygon ID column in each 'sf'.
 #' @param response_var Name of the response column.
-#' @param categorical_covariate_baselines Named list; names are raster layers to treat as categorical, values are baseline level to drop.
+#' @param categorical_covariate_baselines Named list; names are categorical raster layers and values are baseline levels to drop (either level labels or numeric codes).
 #' @param sample_size_var Name of the sample-size column (for binomial models); may be NULL.
 #' @param mesh_args Passed to 'build_mesh()'.
 #' @param na_action Logical; if TRUE, drop or impute NAs instead of stopping.
 #' @param make_mesh Logical; if TRUE, build the spatial mesh over all polygons.
 #' @param verbose Logical; if TRUE, print timing info.
-#' @return An object of class 'disag_data_mmap' with components:
+#' @return An object of class 'disag_data_mmap' with components including
 #'   - 'polygon_data', 'covariate_data', 'aggregation_pixels', …
+#'   - 'categorical_covariate_baselines' (normalized baseline labels)
+#'   - 'categorical_covariate_schema' (internal encoding schema used for fit/predict consistency)
 #' @export
 prepare_data_mmap <- function(polygon_shapefile_list,
                               covariate_rasters_list = NULL,
@@ -43,6 +45,19 @@ prepare_data_mmap <- function(polygon_shapefile_list,
   )
 
   n_times <- length(polygon_shapefile_list)
+  if (is.null(covariate_rasters_list)) {
+    covariate_rasters_list <- rep(list(NULL), n_times)
+  }
+  if (is.null(aggregation_rasters_list)) {
+    aggregation_rasters_list <- rep(list(NULL), n_times)
+  }
+
+  categorical_info <- build_categorical_schema(
+    covariate_rasters_list = covariate_rasters_list,
+    categorical_covariate_baselines = categorical_covariate_baselines
+  )
+  categorical_schema <- categorical_info$schema
+  categorical_covariate_baselines <- categorical_info$baselines
 
   # Process each time point
   per_time <- lapply(
@@ -57,7 +72,7 @@ prepare_data_mmap <- function(polygon_shapefile_list,
         response_var    = response_var,
         sample_size_var = sample_size_var,
         na_action       = na_action,
-        categorical_covariate_baselines = categorical_covariate_baselines
+        categorical_schema = categorical_schema
       )
     }
   )
@@ -92,6 +107,8 @@ prepare_data_mmap <- function(polygon_shapefile_list,
     coords_for_fit = coords_for_fit_combined,
     coords_for_prediction = coords_for_prediction_combined,
     start_end_index = start_end_index_list, # kept as list by time point
+    categorical_covariate_baselines = categorical_covariate_baselines,
+    categorical_covariate_schema = categorical_schema,
     mesh = mesh,
     time_points = seq_len(n_times)
   )
@@ -214,15 +231,26 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
     stop("`make_mesh` must be a single logical value (TRUE or FALSE).")
   }
 
-  # categorical_baselines must be NULL or named list of character
+  # categorical_baselines must be NULL or named list
   if (!is.null(categorical_covariate_baselines)) {
-    if (!is.list(categorical_covariate_baselines) || is.null(names(categorical_covariate_baselines))) {
-      stop("'categorical_covariate_baselines' must be a named list of baseline values such as 'list(landuse = 'urban', soil_type = 'clay')'.")
+    if (!is.list(categorical_covariate_baselines) ||
+        is.null(names(categorical_covariate_baselines)) ||
+        any(!nzchar(names(categorical_covariate_baselines)))) {
+      stop("'categorical_covariate_baselines' must be a named list such as 'list(landuse = \"urban\", soil_type = 3)'.")
     }
-    # ensure each name matches a covariate layer
-    cov_names <- if (is.null(covariate_rasters_list)) character(0) else names(covariate_rasters_list[[1]])
-    bad <- setdiff(names(categorical_covariate_baselines), cov_names)
-    if (length(bad)) stop("Unknown categorical layers: ", paste(bad, collapse=", "))
+    if (is.null(covariate_rasters_list)) {
+      stop("'categorical_covariate_baselines' was supplied but 'covariate_rasters_list' is NULL.")
+    }
+    for (i in seq_along(covariate_rasters_list)) {
+      cov_names_i <- names(covariate_rasters_list[[i]])
+      bad_i <- setdiff(names(categorical_covariate_baselines), cov_names_i)
+      if (length(bad_i)) {
+        stop(
+          "Unknown categorical layers at time ", i, ": ",
+          paste(bad_i, collapse = ", ")
+        )
+      }
+    }
   }
 
   return(invisible(TRUE))
@@ -248,6 +276,7 @@ validate_prepare_data_inputs <- function(polygon_shapefile_list,
 #' @param response_var Name of the response column.
 #' @param sample_size_var Name of the sample-size column, or NULL.
 #' @param na_action Logical; if TRUE, drop/impute NAs instead of erroring.
+#' @param categorical_schema Internal schema from 'build_categorical_schema()'.
 #'
 #' @return A list with elements:
 #'   - 'poly_data': data.frame of polygon-level info (incl. 'poly_local_id' & 'time').
@@ -265,7 +294,7 @@ prepare_time_point <- function(t,
                                response_var,
                                sample_size_var,
                                na_action,
-                               categorical_covariate_baselines) {
+                               categorical_schema) {
   #-- 1. Validate inputs --
   if (!inherits(poly_sf, "sf")) {
     stop("Time ", t, ": `polygon_shapefile_list[[t]]` must be an sf object.")
@@ -357,14 +386,17 @@ prepare_time_point <- function(t,
   # 4f) Handle NAs in covariates (if any exist)
   if (!is.null(cov_rasters)) {
     cov_cols <- setdiff(names(cov_data), c("poly_local_id", "cell", "time"))
+    cat_cov_cols <- intersect(cov_cols, names(categorical_schema))
     na_cov <- unlist(lapply(cov_data[, cov_cols, drop = FALSE], function(x) any(is.na(x))))
     if (any(na_cov)) {
       if (na_action) {
-        for (col in cov_cols) {
+        for (col in setdiff(cov_cols, cat_cov_cols)) {
           col_na <- is.na(cov_data[[col]])
           cov_data[[col]][col_na] <- stats::median(cov_data[[col]], na.rm = TRUE)
         }
-        message("Time ", t, ": imputed NAs in covariates with column medians.")
+        if (length(setdiff(cov_cols, cat_cov_cols)) > 0L) {
+          message("Time ", t, ": imputed NAs in continuous covariates with column medians.")
+        }
       } else {
         stop("Time ", t, ": found NAs in covariates; set na_action = TRUE to impute.")
       }
@@ -372,38 +404,15 @@ prepare_time_point <- function(t,
   }
 
   # 4g) Encode categorical rasters (one-hot, drop baseline)
-  if (!is.null(cov_rasters) && length(categorical_covariate_baselines) > 0) {
-    for (lay in intersect(names(cov_rasters), names(categorical_covariate_baselines))) {
-      vals <- cov_data[[lay]]
-      # derive levels via terra; fallback to unique raster values
-      lvl_list <- terra::levels(cov_rasters[[lay]])
-      if (!is.null(lvl_list) && nrow(lvl_list[[1]]) > 0) {
-        df <- lvl_list[[1]]
-        # assume first column is ID, second column is category label
-        if (ncol(df) >= 2) {
-          lvl_tab <- as.character(df[[2]])
-        } else {
-          lvl_tab <- as.character(df[[1]])
-        }
-      } else {
-        lvl_tab <- sort(unique(terra::values(cov_rasters[[lay]])))
-      }
-      f <- factor(vals, levels = lvl_tab)
-      # validate baseline exists
-      bl <- categorical_covariate_baselines[[lay]]
-      if (!bl %in% lvl_tab) {
-        stop(sprintf("Layer '%s': specified baseline '%s' not found among levels: %s",
-                     lay, bl, paste(lvl_tab, collapse=", ")))
-      }
-      # set baseline
-      f <- relevel(f, ref = bl)
-      # treatment contrasts: intercept + (k-1) dummies
-      X <- model.matrix(~ f)
-      # drop intercept column
-      dm <- X[, -1, drop = FALSE]
-
-      colnames(dm) <- sub("^f", paste0(lay, "_"), colnames(dm))
-      # bind into cov_data and remove original
+  if (!is.null(cov_rasters) && length(categorical_schema) > 0L) {
+    for (lay in intersect(names(cov_rasters), names(categorical_schema))) {
+      dm <- encode_categorical_values(
+        values = cov_data[[lay]],
+        layer_schema = categorical_schema[[lay]],
+        layer_name = lay,
+        context = sprintf("prepare_data_mmap() time %d", t),
+        na_to_baseline = isTRUE(na_action)
+      )
       cov_data <- cbind(cov_data, dm)
       cov_data[[lay]] <- NULL
     }

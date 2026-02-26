@@ -236,6 +236,21 @@ setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
     names(covariates) <- "intercept_only"
   }
 
+  categorical_schema <- tryCatch(model_output$data$categorical_covariate_schema, error = function(e) NULL)
+  if (inherits(covariates, "SpatRaster") &&
+      !(terra::nlyr(covariates) == 1L && identical(names(covariates)[1], "intercept_only"))) {
+    covariates <- encode_categorical_raster_stack(
+      covariates = covariates,
+      categorical_schema = categorical_schema,
+      time_index = ti,
+      context = if (isTRUE(use_training)) {
+        "predict.disag_model_mmap_tmb() using training covariates"
+      } else {
+        "predict.disag_model_mmap_tmb() using new_data"
+      }
+    )
+  }
+
   data$covariate_rasters <- covariates
 
   if (model_output$model_setup$field) {
@@ -272,25 +287,22 @@ setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
     }
   }
 
-  # If covariates present (not the intercept_only placeholder) and tv=TRUE,
-  # assert the layer count matches training p.
+  # If real covariates are present (not the intercept_only placeholder),
+  # enforce count and names against training metadata.
   has_real_covs <- !(terra::nlyr(covariates) == 1 && names(covariates)[1] == "intercept_only")
-  if (tv && has_real_covs && !isTRUE(use_training)) {
+  if (has_real_covs) {
     meta <- tryCatch(model_output$model_setup$coef_meta, error = function(e) NULL)
     p_expected <- if (is.null(meta)) NA_integer_ else meta$p
     train_names <- if (is.null(meta)) NULL else meta$cov_names
 
-    # Count check
     if (!is.na(p_expected) && terra::nlyr(covariates) != p_expected) {
       stop(sprintf("Mismatch in covariate layer count for prediction (got %d, expected %d).",
                    terra::nlyr(covariates), p_expected), call. = FALSE)
     }
 
-    # Name/order alignment (post one-hot names)
     if (!is.null(train_names) && length(train_names)) {
       cur_names <- names(covariates)
       if (setequal(cur_names, train_names) && !identical(cur_names, train_names)) {
-        # Reorder to training order
         covariates <- covariates[[train_names]]
       } else if (!setequal(cur_names, train_names)) {
         stop(sprintf(

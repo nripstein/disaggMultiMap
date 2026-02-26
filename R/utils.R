@@ -87,6 +87,345 @@ compute_coef_meta <- function(data) {
        cov_names = cov_names)
 }
 
+# Build an internal level table (code + label) for one categorical raster layer.
+extract_categorical_level_table <- function(raster_layer, layer_name, context = "categorical schema") {
+  lvl_list <- tryCatch(terra::levels(raster_layer), error = function(e) NULL)
+  if (!is.null(lvl_list) &&
+      length(lvl_list) > 0L &&
+      !is.null(lvl_list[[1]]) &&
+      is.data.frame(lvl_list[[1]]) &&
+      nrow(lvl_list[[1]]) > 0L) {
+    lvl_df <- lvl_list[[1]]
+    code <- lvl_df[[1]]
+    if (ncol(lvl_df) >= 2L) {
+      label <- lvl_df[[2]]
+    } else {
+      label <- lvl_df[[1]]
+    }
+  } else {
+    vals <- sort(unique(stats::na.omit(terra::values(raster_layer))))
+    if (!length(vals)) {
+      stop(sprintf(
+        "%s: layer '%s' has no non-missing values to define categorical levels.",
+        context, layer_name
+      ), call. = FALSE)
+    }
+    code <- vals
+    label <- as.character(vals)
+  }
+
+  tbl <- data.frame(
+    code = code,
+    label = as.character(label),
+    stringsAsFactors = FALSE
+  )
+  tbl <- tbl[!is.na(tbl$code) & !is.na(tbl$label), , drop = FALSE]
+  tbl <- unique(tbl)
+  if (!nrow(tbl)) {
+    stop(sprintf(
+      "%s: layer '%s' produced an empty categorical level table.",
+      context, layer_name
+    ), call. = FALSE)
+  }
+  tbl
+}
+
+# Normalize user-provided categorical baseline value to canonical label.
+normalize_categorical_baseline_value <- function(level_table, baseline_value, layer_name, context = "categorical baseline") {
+  baseline_chr <- as.character(baseline_value)
+  labels <- level_table$label
+  codes_chr <- as.character(level_table$code)
+
+  idx <- match(baseline_chr, labels)
+  if (is.na(idx)) {
+    idx <- match(baseline_chr, codes_chr)
+  }
+  if (is.na(idx)) {
+    baseline_num <- suppressWarnings(as.numeric(baseline_chr))
+    code_num <- suppressWarnings(as.numeric(codes_chr))
+    if (!is.na(baseline_num)) {
+      hit <- which(!is.na(code_num) & code_num == baseline_num)
+      if (length(hit) == 1L) {
+        idx <- hit
+      }
+    }
+  }
+
+  if (is.na(idx)) {
+    stop(sprintf(
+      paste0(
+        "%s: layer '%s' baseline '%s' not found.\n",
+        "Available labels: %s\n",
+        "Available codes : %s"
+      ),
+      context,
+      layer_name,
+      baseline_chr,
+      paste(unique(labels), collapse = ", "),
+      paste(unique(codes_chr), collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  labels[[idx]]
+}
+
+# Build global categorical schema from all time slices.
+build_categorical_schema <- function(covariate_rasters_list, categorical_covariate_baselines) {
+  if (is.null(categorical_covariate_baselines) || !length(categorical_covariate_baselines)) {
+    return(list(schema = list(), baselines = list()))
+  }
+
+  schema <- list()
+  normalized_baselines <- list()
+
+  for (layer_name in names(categorical_covariate_baselines)) {
+    layer_tables <- lapply(seq_along(covariate_rasters_list), function(i) {
+      cov_i <- covariate_rasters_list[[i]]
+      if (is.null(cov_i) || !inherits(cov_i, "SpatRaster")) {
+        stop(sprintf(
+          "prepare_data_mmap(): categorical layer '%s' requested but covariate raster for time %d is missing.",
+          layer_name, i
+        ), call. = FALSE)
+      }
+      extract_categorical_level_table(
+        cov_i[[layer_name]],
+        layer_name = layer_name,
+        context = sprintf("prepare_data_mmap() time %d", i)
+      )
+    })
+
+    merged_tbl <- do.call(rbind, layer_tables)
+    merged_tbl$code_chr <- as.character(merged_tbl$code)
+
+    by_label <- split(merged_tbl$code_chr, merged_tbl$label)
+    bad_label <- names(by_label)[vapply(by_label, function(x) length(unique(x)) > 1L, logical(1))]
+    if (length(bad_label)) {
+      stop(sprintf(
+        "prepare_data_mmap(): categorical layer '%s' has labels mapped to multiple codes: %s.",
+        layer_name,
+        paste(bad_label, collapse = ", ")
+      ), call. = FALSE)
+    }
+
+    by_code <- split(merged_tbl$label, merged_tbl$code_chr)
+    bad_code <- names(by_code)[vapply(by_code, function(x) length(unique(x)) > 1L, logical(1))]
+    if (length(bad_code)) {
+      stop(sprintf(
+        "prepare_data_mmap(): categorical layer '%s' has codes mapped to multiple labels: %s.",
+        layer_name,
+        paste(bad_code, collapse = ", ")
+      ), call. = FALSE)
+    }
+
+    label_order <- character(0)
+    for (tbl in layer_tables) {
+      for (lab in tbl$label) {
+        if (!(lab %in% label_order)) {
+          label_order <- c(label_order, lab)
+        }
+      }
+    }
+
+    first_idx <- match(label_order, merged_tbl$label)
+    level_codes <- merged_tbl$code[first_idx]
+    level_table <- data.frame(
+      code = level_codes,
+      label = label_order,
+      stringsAsFactors = FALSE
+    )
+
+    baseline_label <- normalize_categorical_baseline_value(
+      level_table = level_table,
+      baseline_value = categorical_covariate_baselines[[layer_name]],
+      layer_name = layer_name,
+      context = "prepare_data_mmap()"
+    )
+
+    dummy_levels <- setdiff(label_order, baseline_label)
+    dummy_names <- if (length(dummy_levels)) {
+      paste0(layer_name, "_", make.names(dummy_levels))
+    } else {
+      character(0)
+    }
+
+    baseline_idx <- match(baseline_label, level_table$label)
+    schema[[layer_name]] <- list(
+      layer_name = layer_name,
+      level_labels = level_table$label,
+      level_codes = level_table$code,
+      baseline_label = baseline_label,
+      baseline_code = level_table$code[[baseline_idx]],
+      dummy_levels = dummy_levels,
+      dummy_names = dummy_names
+    )
+    normalized_baselines[[layer_name]] <- baseline_label
+  }
+
+  list(schema = schema, baselines = normalized_baselines)
+}
+
+# Map raw categorical values (codes or labels) to canonical labels from schema.
+map_values_to_categorical_labels <- function(values, layer_schema, layer_name, context = "categorical mapping") {
+  labels_out <- rep(NA_character_, length(values))
+  if (!length(values)) return(labels_out)
+
+  not_na <- !is.na(values)
+  if (!any(not_na)) return(labels_out)
+
+  vals_chr <- as.character(values[not_na])
+  code_chr <- as.character(layer_schema$level_codes)
+  labels <- layer_schema$level_labels
+
+  idx <- match(vals_chr, code_chr)
+
+  unmatched <- which(is.na(idx))
+  if (length(unmatched)) {
+    idx_label <- match(vals_chr[unmatched], labels)
+    idx[unmatched[!is.na(idx_label)]] <- idx_label[!is.na(idx_label)]
+  }
+
+  unmatched <- which(is.na(idx))
+  if (length(unmatched)) {
+    vals_num <- suppressWarnings(as.numeric(vals_chr[unmatched]))
+    code_num <- suppressWarnings(as.numeric(code_chr))
+    if (length(code_num)) {
+      for (uu in seq_along(unmatched)) {
+        if (!is.na(vals_num[[uu]])) {
+          hits <- which(!is.na(code_num) & code_num == vals_num[[uu]])
+          if (length(hits) == 1L) {
+            idx[unmatched[[uu]]] <- hits[[1]]
+          }
+        }
+      }
+    }
+  }
+
+  unmatched <- which(is.na(idx))
+  if (length(unmatched)) {
+    bad_vals <- unique(vals_chr[unmatched])
+    stop(sprintf(
+      paste0(
+        "%s: layer '%s' contains values not present in training categorical schema: %s.\n",
+        "Allowed labels: %s\n",
+        "Allowed codes : %s"
+      ),
+      context,
+      layer_name,
+      paste(bad_vals, collapse = ", "),
+      paste(unique(labels), collapse = ", "),
+      paste(unique(code_chr), collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  labels_out[not_na] <- labels[idx]
+  labels_out
+}
+
+# Encode one categorical vector into deterministic treatment dummies.
+encode_categorical_values <- function(values, layer_schema, layer_name, context = "categorical encoding", na_to_baseline = FALSE) {
+  labels <- map_values_to_categorical_labels(
+    values = values,
+    layer_schema = layer_schema,
+    layer_name = layer_name,
+    context = context
+  )
+
+  if (isTRUE(na_to_baseline)) {
+    labels[is.na(labels)] <- layer_schema$baseline_label
+  }
+
+  n <- length(labels)
+  k <- length(layer_schema$dummy_levels)
+  if (k == 0L) {
+    return(matrix(numeric(0), nrow = n, ncol = 0, dimnames = list(NULL, character(0))))
+  }
+
+  dm <- vapply(layer_schema$dummy_levels, function(lvl) {
+    out <- rep(NA_real_, n)
+    keep <- !is.na(labels)
+    out[keep] <- as.numeric(labels[keep] == lvl)
+    out
+  }, numeric(n))
+
+  if (k == 1L) {
+    dm <- matrix(dm, ncol = 1L)
+  }
+  colnames(dm) <- layer_schema$dummy_names
+  dm
+}
+
+# Expand raw categorical layers in a SpatRaster into schema-consistent dummy layers.
+encode_categorical_raster_stack <- function(covariates,
+                                            categorical_schema,
+                                            time_index = NULL,
+                                            context = "prediction") {
+  if (is.null(covariates) || !inherits(covariates, "SpatRaster")) return(covariates)
+  if (is.null(categorical_schema) || !length(categorical_schema)) return(covariates)
+
+  layer_names <- names(covariates)
+  schema_layers <- names(categorical_schema)
+  if (!length(schema_layers)) return(covariates)
+
+  context_tag <- if (is.null(time_index)) context else sprintf("%s (time %s)", context, time_index)
+
+  for (lay in schema_layers) {
+    sch <- categorical_schema[[lay]]
+    has_raw <- lay %in% layer_names
+    has_any_dummy <- length(sch$dummy_names) > 0L && any(sch$dummy_names %in% layer_names)
+    has_all_dummies <- length(sch$dummy_names) > 0L && all(sch$dummy_names %in% layer_names)
+
+    if (has_raw && has_any_dummy) {
+      stop(sprintf(
+        "%s: layer '%s' appears as both raw categorical and encoded dummy names.",
+        context_tag, lay
+      ), call. = FALSE)
+    }
+    if (!has_raw && has_any_dummy && !has_all_dummies) {
+      stop(sprintf(
+        "%s: layer '%s' has a partial dummy set. Expected all of: %s",
+        context_tag, lay, paste(sch$dummy_names, collapse = ", ")
+      ), call. = FALSE)
+    }
+  }
+
+  out_layers <- list()
+  for (lay in layer_names) {
+    if (!(lay %in% schema_layers)) {
+      out_layers[[length(out_layers) + 1L]] <- covariates[[lay]]
+      next
+    }
+
+    sch <- categorical_schema[[lay]]
+    vals <- terra::values(covariates[[lay]], mat = FALSE)
+    dm <- encode_categorical_values(
+      values = vals,
+      layer_schema = sch,
+      layer_name = lay,
+      context = context_tag,
+      na_to_baseline = FALSE
+    )
+
+    if (ncol(dm) > 0L) {
+      idx <- rep(which(layer_names == lay)[1], ncol(dm))
+      dummy_stack <- covariates[[idx]]
+      names(dummy_stack) <- colnames(dm)
+      terra::values(dummy_stack) <- dm
+      for (jj in seq_len(ncol(dm))) {
+        out_layers[[length(out_layers) + 1L]] <- dummy_stack[[jj]]
+      }
+    }
+  }
+
+  if (!length(out_layers)) {
+    template <- covariates[[1]]
+    terra::values(template) <- 0
+    names(template) <- "intercept_only"
+    return(template)
+  }
+
+  do.call(c, out_layers)
+}
+
 #' Normalize fixed-effect parameter names
 #'
 #' @description
