@@ -288,6 +288,26 @@ summary.disag_model_mmap_aghq <- function(object, ...) {
   if (!is.null(object$aghq_model)) {
     # Store the direct summary object for later use
     aghq_summary <- summary(object$aghq_model)
+    # Normalize fixed-effect names in AGHQ summary output (especially summarytable rownames)
+    # so shared/time-varying slopes reflect training covariate names.
+    coef_meta <- tryCatch(object$model_setup$coef_meta, error = function(e) NULL)
+    tv_flag <- isTRUE(tryCatch(object$model_setup$time_varying_betas, error = function(e) FALSE))
+    if (!is.null(coef_meta)) {
+      if (!is.null(aghq_summary$mode) && !is.null(names(aghq_summary$mode))) {
+        names(aghq_summary$mode) <- normalize_fixed_names(
+          names(aghq_summary$mode),
+          coef_meta = coef_meta,
+          time_varying_betas = tv_flag
+        )
+      }
+      if (!is.null(aghq_summary$summarytable) && !is.null(rownames(aghq_summary$summarytable))) {
+        rownames(aghq_summary$summarytable) <- normalize_fixed_names(
+          rownames(aghq_summary$summarytable),
+          coef_meta = coef_meta,
+          time_varying_betas = tv_flag
+        )
+      }
+    }
     quad_points <- object$aghq_model$normalized_posterior$grid$level[[1]]
   }
 
