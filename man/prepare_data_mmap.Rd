@@ -29,7 +29,7 @@ prepare_data_mmap(
 
 \item{response_var}{Name of the response column.}
 
-\item{categorical_covariate_baselines}{Named list; names are raster layers to treat as categorical, values are baseline level to drop.}
+\item{categorical_covariate_baselines}{Named list; names are categorical raster layers and values are baseline levels to drop (either level labels or numeric codes).}
 
 \item{sample_size_var}{Name of the sample-size column (for binomial models); may be NULL.}
 
@@ -42,8 +42,10 @@ prepare_data_mmap(
 \item{verbose}{Logical; if TRUE, print timing info.}
 }
 \value{
-An object of class 'disag_data_mmap' with components:
+An object of class 'disag_data_mmap' with components including
   - 'polygon_data', 'covariate_data', 'aggregation_pixels', …
+  - 'categorical_covariate_baselines' (normalized baseline labels)
+  - 'categorical_covariate_schema' (internal encoding schema used for fit/predict consistency)
 }
 \description{
 Given lists of polygon sf's, covariate rasters, and aggregation rasters,

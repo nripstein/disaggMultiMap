@@ -13,7 +13,7 @@ prepare_time_point(
   response_var,
   sample_size_var,
   na_action,
-  categorical_covariate_baselines
+  categorical_schema
 )
 }
 \arguments{
@@ -32,6 +32,8 @@ prepare_time_point(
 \item{sample_size_var}{Name of the sample-size column, or NULL.}
 
 \item{na_action}{Logical; if TRUE, drop/impute NAs instead of erroring.}
+
+\item{categorical_schema}{Internal schema from 'build_categorical_schema()'.}
 }
 \value{
 A list with elements:

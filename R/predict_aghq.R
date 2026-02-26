@@ -49,6 +49,7 @@ get_predict_matrices <- function(data,
   coords <- data$coords_for_prediction
   # A matrix projects from mesh nodes to cells.
   Amatrix <- fmesher::fm_evaluator(data$mesh, loc = as.matrix(coords))$proj$A
+  categorical_schema <- tryCatch(data$categorical_covariate_schema, error = function(e) NULL)
 
   #-- Construct design matrices for each time slice --
   X_list <- vector("list", n_times)
@@ -58,6 +59,18 @@ get_predict_matrices <- function(data,
 
   for (i in seq_len(n_times)) {
     cov_i <- cov_list[[i]]
+    if (!is.null(cov_i) && inherits(cov_i, "SpatRaster")) {
+      cov_i <- encode_categorical_raster_stack(
+        covariates = cov_i,
+        categorical_schema = categorical_schema,
+        time_index = i,
+        context = if (isTRUE(training_rasters)) {
+          "predict.disag_model_mmap_aghq() using training covariates"
+        } else {
+          "predict.disag_model_mmap_aghq() using new_data"
+        }
+      )
+    }
 
     # Intercept-only model (no covariates in training): ignore provided covariates
     if (length(expected_cov_names) == 0L || is.null(cov_i)) {
@@ -72,21 +85,16 @@ get_predict_matrices <- function(data,
       # Align covariate layer order to training order
       cur_names <- names(cov_i)
       if (!identical(cur_names, expected_cov_names)) {
-        if (training_rasters && length(cur_names) == length(expected_cov_names)) {
-          # Trust training order; just rename to expected to ensure consistency
-          names(cov_i) <- expected_cov_names
-        } else {
-          if (!setequal(cur_names, expected_cov_names)) {
-            stop(paste0(
-              "Covariate layer names for prediction do not match training.\n",
-              if (isTRUE(time_varying_betas)) "When time_varying_betas=TRUE, names and order must match across time.\n" else "",
-              "Expected: ", paste(expected_cov_names, collapse = ", "), "\n",
-              "Got     : ", paste(cur_names, collapse = ", ")
-            ))
-          }
-          # Same set, different order → reorder to training order
-          cov_i <- cov_i[[expected_cov_names]]
+        if (!setequal(cur_names, expected_cov_names)) {
+          stop(paste0(
+            "Covariate layer names for prediction do not match training.\n",
+            if (isTRUE(time_varying_betas)) "When time_varying_betas=TRUE, names and order must match across time.\n" else "",
+            "Expected: ", paste(expected_cov_names, collapse = ", "), "\n",
+            "Got     : ", paste(cur_names, collapse = ", ")
+          ))
         }
+        # Same set, different order -> reorder to training order
+        cov_i <- cov_i[[expected_cov_names]]
       }
 
       # Extract raster values as matrix: rows=cells, cols=variables (training order)
