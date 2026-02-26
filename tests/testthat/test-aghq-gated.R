@@ -81,25 +81,33 @@ test_that("predict.disag_model_mmap_aghq validates new_data covariate names (gat
   )
 })
 
-test_that("AGHQ shared-betas fit with two covariates currently errors (gated regression)", {
+test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
   skip_if_aghq_opted_out()
   data_obj <- get_cached_aghq_prepared_data("aghq_small_twocov_mesh")
 
-  expect_error(
-    suppressWarnings(
-      disag_model_mmap(
-        data = data_obj,
-        engine = "AGHQ",
-        family = "poisson",
-        link = "log",
-        aghq_k = 1,
-        field = TRUE,
-        iid = TRUE,
-        time_varying_betas = FALSE,
-        silent = TRUE,
-        optimizer = "BFGS"
-      )
-    ),
-    "Internal: some slope names not found in theta order\\."
+  fit <- suppressWarnings(
+    disag_model_mmap(
+      data = data_obj,
+      engine = "AGHQ",
+      family = "poisson",
+      link = "log",
+      aghq_k = 1,
+      field = TRUE,
+      iid = TRUE,
+      time_varying_betas = FALSE,
+      silent = TRUE,
+      optimizer = "BFGS"
+    )
   )
+
+  expect_s3_class(fit, "disag_model_mmap_aghq")
+  expect_false(isTRUE(fit$model_setup$time_varying_betas))
+
+  theta_order <- fit$model_setup$theta_order
+  beta_map <- fit$model_setup$beta_index_map
+  cov_names <- fit$model_setup$coef_meta$cov_names
+
+  expect_equal(length(cov_names), 2L)
+  expect_false(any(is.na(beta_map$slope_idx)))
+  expect_equal(theta_order[beta_map$slope_idx], cov_names)
 })

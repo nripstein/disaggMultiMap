@@ -114,7 +114,17 @@ disag_model_mmap_aghq <- function(data,
       intercept_idx <- match("intercept", theta_order)
       if (is.na(intercept_idx)) stop("Internal: 'intercept' not found in theta order.")
       slope_idx <- if (p > 0L) match(coef_meta$cov_names, theta_order) else integer(0)
-      if (p > 0L && any(is.na(slope_idx))) stop("Internal: some slope names not found in theta order.")
+      if (p > 0L && any(is.na(slope_idx))) {
+        missing <- coef_meta$cov_names[is.na(slope_idx)]
+        slope_like <- theta_order[grepl("^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", theta_order)]
+        stop(
+          "Internal: some slope names not found in theta order.\n",
+          "Missing expected slopes: ", paste(missing, collapse = ", "), "\n",
+          "Expected slope order: ", paste(coef_meta$cov_names, collapse = ", "), "\n",
+          "Observed slope-like theta names: ",
+          if (length(slope_like)) paste(slope_like, collapse = ", ") else "<none>"
+        )
+      }
       beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
                              tv = FALSE, p = p, Tn = Tn)
     }

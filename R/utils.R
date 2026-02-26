@@ -440,10 +440,11 @@ normalize_fixed_names <- function(nm, coef_meta, time_varying_betas) {
   p   <- coef_meta$p
   Tn  <- coef_meta$n_times
   cvs <- coef_meta$cov_names
+  shared_slope_pat <- "^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$"
 
   if (!isTRUE(time_varying_betas)) {
-    # Shared case: slope -> cov_names (in order), intercept unchanged
-    idx <- which(nm == "slope" | grepl("^slope(\\[|\\.|$)", nm))
+    # Shared case: slope/slope1/slope.1/slope[1] -> cov_names (in order)
+    idx <- which(grepl(shared_slope_pat, nm))
     if (length(idx) == p && p > 0L) nm[idx] <- cvs
     return(nm)
   }
@@ -534,6 +535,7 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
   # Defensive defaults
   if (is.null(old_names)) return(old_names)
   new <- old_names
+  shared_slope_pat <- "^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$"
 
   # Pull meta safely
   p   <- tryCatch(coef_meta$p,       error = function(e) 0L)
@@ -554,7 +556,7 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
   # Shared case
   if (!isTRUE(time_varying_betas)) {
     if (p > 0L) {
-      idx_s <- which(old_names == "slope" | grepl("^slope(\\[|\\.|$)", old_names))
+      idx_s <- which(grepl(shared_slope_pat, old_names))
       # Only rename if lengths match exactly
       if (length(idx_s) == p) new[idx_s] <- cvs
     }
