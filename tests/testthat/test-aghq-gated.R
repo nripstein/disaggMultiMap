@@ -81,6 +81,18 @@ test_that("predict.disag_model_mmap_aghq validates new_data covariate names (gat
   )
 })
 
+test_that("summary.disag_model_mmap_aghq normalizes time-varying slope names (gated)", {
+  skip_if_aghq_opted_out()
+  bundle <- suppressWarnings(get_cached_aghq_fit("aghq_small_onecov_shared", time_varying_betas = TRUE))
+  fit <- bundle$fit
+
+  s <- suppressWarnings(summary(fit))
+  rn <- rownames(s$aghq_summary$summarytable)
+
+  expect_true(all(c("intercept_t1", "intercept_t2", "temp_t1", "temp_t2") %in% rn))
+  expect_false(any(grepl("^slope_t", rn)))
+})
+
 test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
   skip_if_aghq_opted_out()
   data_obj <- get_cached_aghq_prepared_data("aghq_small_twocov_mesh")
