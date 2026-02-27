@@ -330,8 +330,9 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
                                 optimizer = "BFGS",
                                 field = TRUE,
                                 iid = TRUE,
-                                time_varying_betas = FALSE) {
-  key <- paste(name, aghq_k, optimizer, field, iid, time_varying_betas, sep = "|")
+                                time_varying_betas = FALSE,
+                                use_legacy_args = FALSE) {
+  key <- paste(name, aghq_k, optimizer, field, iid, time_varying_betas, use_legacy_args, sep = "|")
   if (exists(key, envir = .mmap_aghq_fit_cache, inherits = FALSE)) {
     return(get(key, envir = .mmap_aghq_fit_cache, inherits = FALSE))
   }
@@ -342,18 +343,35 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
     stop("Unknown AGHQ fit fixture name: ", name)
   )
 
-  fit <- disag_model_mmap(
-    data = prepared,
-    engine = "AGHQ",
-    family = "poisson",
-    link = "log",
-    aghq_k = aghq_k,
-    field = field,
-    iid = iid,
-    time_varying_betas = time_varying_betas,
-    silent = TRUE,
-    optimizer = optimizer
-  )
+  if (isTRUE(use_legacy_args)) {
+    fit <- disag_model_mmap(
+      data = prepared,
+      engine = "AGHQ",
+      family = "poisson",
+      link = "log",
+      aghq_k = aghq_k,
+      field = field,
+      iid = iid,
+      time_varying_betas = time_varying_betas,
+      silent = TRUE,
+      optimizer = optimizer
+    )
+  } else {
+    fit <- disag_model_mmap(
+      data = prepared,
+      engine = "AGHQ",
+      family = "poisson",
+      link = "log",
+      engine.args = list(
+        aghq_k = aghq_k,
+        optimizer = optimizer
+      ),
+      field = field,
+      iid = iid,
+      time_varying_betas = time_varying_betas,
+      silent = TRUE
+    )
+  }
 
   out <- list(data = prepared, fit = fit)
   assign(key, out, envir = .mmap_aghq_fit_cache)

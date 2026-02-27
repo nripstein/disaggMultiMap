@@ -7,7 +7,7 @@ test_that("disag_model_mmap wrapper dispatches to TMB", {
       engine = "TMB",
       family = "poisson",
       link = "log",
-      iterations = 40,
+      engine.args = list(iterations = 40),
       field = FALSE,
       iid = FALSE,
       silent = TRUE
