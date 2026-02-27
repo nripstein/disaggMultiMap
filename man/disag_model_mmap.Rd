@@ -11,6 +11,7 @@ disag_model_mmap(
   link = "log",
   engine = c("AGHQ", "TMB"),
   time_varying_betas = FALSE,
+  engine.args = NULL,
   aghq_k = 2,
   field = TRUE,
   iid = TRUE,
@@ -22,10 +23,49 @@ disag_model_mmap(
 )
 }
 \arguments{
+\item{data}{A \code{disag_data_mmap} object.}
+
+\item{priors}{Optional named list of prior overrides.}
+
+\item{family}{One of \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"negbinomial"}.}
+
+\item{link}{One of \code{"identity"}, \code{"logit"}, or \code{"log"}.}
+
 \item{engine}{Character; either "AGHQ" or "TMB"}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
+\item{engine.args}{Optional named list of engine-specific options.
+Supported keys:
+\itemize{
+\item AGHQ: \code{aghq_k}, \code{optimizer}
+\item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
+}}
+
+\item{aghq_k}{Deprecated at wrapper level; use \code{engine.args = list(aghq_k = ...)}.
+Retained for backward compatibility.}
+
+\item{field}{Logical; include spatial field?}
+
+\item{iid}{Logical; include IID polygon effects?}
+
+\item{silent}{Logical; pass through to engine fit function.}
+
+\item{starting_values}{Optional named list of starting values.}
+
+\item{optimizer}{Deprecated at wrapper level; use
+\code{engine.args = list(optimizer = ...)}. Retained for backward compatibility.}
+
+\item{verbose}{Logical; print runtime diagnostics.}
+
+\item{...}{Additional arguments. Engine-specific arguments passed via \code{...}
+are deprecated in this wrapper and should be moved to \code{engine.args}.}
+}
+\value{
+A fitted model object of class \code{disag_model_mmap_tmb} or
+\code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
 }
 \description{
-Fit a multi‑map disaggregation model (via AGHQ or TMB)
+Top-level fitting wrapper with engine dispatch and engine-specific argument
+handling. Engine-specific controls should be supplied via \code{engine.args}.
 }

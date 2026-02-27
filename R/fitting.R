@@ -1,7 +1,35 @@
-#' Fit a multi‑map disaggregation model (via AGHQ or TMB)
+#' Fit a multi-map disaggregation model (via AGHQ or TMB)
 #'
-#' @param engine Character; either "AGHQ" or "TMB"
-#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
+#' @description
+#' Top-level fitting wrapper with engine dispatch and engine-specific argument
+#' handling. Engine-specific controls should be supplied via \code{engine.args}.
+#'
+#' @param data A \code{disag_data_mmap} object.
+#' @param priors Optional named list of prior overrides.
+#' @param family One of \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"negbinomial"}.
+#' @param link One of \code{"identity"}, \code{"logit"}, or \code{"log"}.
+#' @param engine Character; either \code{"AGHQ"} or \code{"TMB"}.
+#' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect.
+#' @param engine.args Optional named list of engine-specific options.
+#'   Supported keys:
+#'   \itemize{
+#'     \item AGHQ: \code{aghq_k}, \code{optimizer}
+#'     \item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
+#'   }
+#' @param aghq_k Deprecated at wrapper level; use \code{engine.args = list(aghq_k = ...)}.
+#'   Retained for backward compatibility.
+#' @param field Logical; include spatial field?
+#' @param iid Logical; include IID polygon effects?
+#' @param silent Logical; pass through to engine fit function.
+#' @param starting_values Optional named list of starting values.
+#' @param optimizer Deprecated at wrapper level; use
+#'   \code{engine.args = list(optimizer = ...)}. Retained for backward compatibility.
+#' @param verbose Logical; print runtime diagnostics.
+#' @param ... Additional arguments. Engine-specific arguments passed via \code{...}
+#'   are deprecated in this wrapper and should be moved to \code{engine.args}.
+#'
+#' @return A fitted model object of class \code{disag_model_mmap_tmb} or
+#'   \code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
 #' @export
 disag_model_mmap <- function(data,
                              priors = NULL,
@@ -9,46 +37,256 @@ disag_model_mmap <- function(data,
                              link   = "log",
                              engine = c("AGHQ","TMB"),
                              time_varying_betas = FALSE,
-                             aghq_k = 2, # AGHQ‑only argument
+                             engine.args = NULL,
+                             aghq_k = 2, # Deprecated wrapper argument; prefer engine.args$aghq_k
                              field           = TRUE,
                              iid             = TRUE,
                              silent          = TRUE,
                              starting_values = NULL,
-                             optimizer       = NULL,
+                             optimizer       = NULL, # Deprecated wrapper argument; prefer engine.args$optimizer
                              verbose         = FALSE,
                              ...) {
   engine <- match.arg(engine)
-  if (engine == "AGHQ") {
-    disag_model_mmap_aghq(
-      data               = data,
-      priors             = priors,
-      family             = family,
-      link               = link,
-      time_varying_betas = time_varying_betas,
-      aghq_k             = aghq_k,
-      field              = field,
-      iid                = iid,
-      silent             = silent,
-      starting_values    = starting_values,
-      optimizer          = optimizer,
-      verbose            = verbose,
-      ...
-    )
-  } else {
-    disag_model_mmap_tmb(
-      data               = data,
-      priors             = priors,
-      family             = family,
-      link               = link,
-      time_varying_betas = time_varying_betas,
-      field              = field,
-      iid                = iid,
-      silent             = silent,
-      starting_values    = starting_values,
-      verbose            = verbose,
-      ...
+  engine_specs <- get_engine_specs_mmap()
+  engine_spec <- engine_specs[[engine]]
+
+  dots <- list(...)
+  dot_names <- names(dots)
+  if (is.null(dot_names)) {
+    dot_names <- rep("", length(dots))
+  }
+
+  engine.args <- validate_engine_args_container(engine.args)
+
+  # Extract named engine-specific arguments supplied via ... (deprecated path).
+  idx_engine_dots <- which(!is.na(dot_names) & nzchar(dot_names) & dot_names %in% engine_spec$engine_keys)
+  dot_engine_args <- if (length(idx_engine_dots)) dots[idx_engine_dots] else list()
+  passthrough_non_engine_dots <- if (length(idx_engine_dots)) dots[-idx_engine_dots] else dots
+
+  if (length(dot_engine_args)) {
+    warning(
+      paste0(
+        "Engine-specific arguments in `...` are deprecated in `disag_model_mmap()` (",
+        paste(unique(names(dot_engine_args)), collapse = ", "),
+        "). Use `engine.args = list(...)`."
+      ),
+      call. = FALSE
     )
   }
+
+  # Legacy dedicated arguments retained for backward compatibility.
+  legacy_named_args <- list()
+  used_aghq_k <- !missing(aghq_k)
+  used_optimizer <- !missing(optimizer)
+
+  if (engine == "AGHQ") {
+    if (used_aghq_k) {
+      warning(
+        "`aghq_k` in `disag_model_mmap()` is deprecated; use `engine.args = list(aghq_k = ...)`.",
+        call. = FALSE
+      )
+      legacy_named_args$aghq_k <- aghq_k
+    }
+    if (used_optimizer) {
+      warning(
+        "`optimizer` in `disag_model_mmap()` is deprecated; use `engine.args = list(optimizer = ...)`.",
+        call. = FALSE
+      )
+      legacy_named_args$optimizer <- optimizer
+    }
+  } else {
+    if (used_aghq_k) {
+      warning(
+        paste0("`aghq_k` is AGHQ-specific and was ignored because `engine = \"", engine, "\"`."),
+        call. = FALSE
+      )
+    }
+    if (used_optimizer) {
+      warning(
+        paste0("`optimizer` is AGHQ-specific and was ignored because `engine = \"", engine, "\"`."),
+        call. = FALSE
+      )
+    }
+  }
+
+  resolved_engine_args <- resolve_engine_args_mmap(
+    engine = engine,
+    engine_spec = engine_spec,
+    engine_args = engine.args,
+    legacy_named_args = legacy_named_args,
+    dot_engine_args = dot_engine_args
+  )
+  resolved_engine_args <- validate_engine_specific_values(
+    engine = engine,
+    resolved_engine_args = resolved_engine_args
+  )
+
+  common_args <- list(
+    data               = data,
+    priors             = priors,
+    family             = family,
+    link               = link,
+    time_varying_betas = time_varying_betas,
+    field              = field,
+    iid                = iid,
+    silent             = silent,
+    starting_values    = starting_values,
+    verbose            = verbose
+  )
+
+  dispatch_args <- c(common_args, resolved_engine_args, passthrough_non_engine_dots)
+  do.call(engine_spec$fit_fun, dispatch_args)
+}
+
+get_engine_specs_mmap <- function() {
+  list(
+    AGHQ = list(
+      fit_fun = disag_model_mmap_aghq,
+      engine_keys = c("aghq_k", "optimizer"),
+      defaults = list(aghq_k = 2L)
+    ),
+    TMB = list(
+      fit_fun = disag_model_mmap_tmb,
+      engine_keys = c("iterations", "hess_control_parscale", "hess_control_ndeps"),
+      defaults = list()
+    )
+  )
+}
+
+validate_engine_args_container <- function(engine.args) {
+  if (is.null(engine.args)) {
+    return(list())
+  }
+  if (!is.list(engine.args)) {
+    stop("`engine.args` must be NULL or a named list.", call. = FALSE)
+  }
+  if (!length(engine.args)) {
+    return(list())
+  }
+
+  nm <- names(engine.args)
+  if (is.null(nm)) {
+    stop("`engine.args` must be a named list.", call. = FALSE)
+  }
+  if (any(is.na(nm) | !nzchar(nm))) {
+    stop("`engine.args` contains missing or empty names.", call. = FALSE)
+  }
+  if (anyDuplicated(nm)) {
+    dup <- unique(nm[duplicated(nm)])
+    stop(
+      "`engine.args` contains duplicated names: ",
+      paste(dup, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  engine.args
+}
+
+resolve_engine_args_mmap <- function(engine,
+                                     engine_spec,
+                                     engine_args,
+                                     legacy_named_args,
+                                     dot_engine_args) {
+  allowed <- engine_spec$engine_keys
+
+  unknown_engine_args <- setdiff(names(engine_args), allowed)
+  if (length(unknown_engine_args)) {
+    warning(
+      paste0(
+        "Ignoring unknown `engine.args` key(s) for engine ",
+        engine,
+        ": ",
+        paste(unknown_engine_args, collapse = ", "),
+        ". Allowed keys are: ",
+        if (length(allowed)) paste(allowed, collapse = ", ") else "<none>",
+        "."
+      ),
+      call. = FALSE
+    )
+    keep_idx <- names(engine_args) %in% allowed
+    engine_args <- engine_args[keep_idx]
+  }
+
+  resolved <- engine_spec$defaults
+  source_map <- if (length(resolved)) {
+    setNames(rep("default", length(resolved)), names(resolved))
+  } else {
+    setNames(character(0), character(0))
+  }
+
+  apply_source <- function(src_list, source_label) {
+    if (!length(src_list)) return(invisible(NULL))
+    for (ii in seq_along(src_list)) {
+      nm <- names(src_list)[ii]
+      if (!nzchar(nm) || !(nm %in% allowed)) next
+
+      if (nm %in% names(source_map) && source_map[[nm]] != "default" && source_map[[nm]] != source_label) {
+        warning(
+          paste0(
+            "Argument conflict for `", nm, "`: using value from ", source_label,
+            " and overriding value from ", source_map[[nm]], "."
+          ),
+          call. = FALSE
+        )
+      }
+      resolved[[nm]] <<- src_list[[ii]]
+      source_map[[nm]] <<- source_label
+    }
+  }
+
+  # Lowest to highest precedence.
+  apply_source(dot_engine_args, "`...`")
+  apply_source(legacy_named_args, "deprecated top-level arguments")
+  apply_source(engine_args, "`engine.args`")
+
+  resolved
+}
+
+validate_engine_specific_values <- function(engine, resolved_engine_args) {
+  is_scalar_integerish <- function(x) {
+    is.numeric(x) && length(x) == 1L && is.finite(x) && abs(x - round(x)) < 1e-8
+  }
+
+  if (engine == "AGHQ") {
+    if ("aghq_k" %in% names(resolved_engine_args)) {
+      k <- resolved_engine_args$aghq_k
+      if (!is_scalar_integerish(k) || k < 1) {
+        stop("`aghq_k` must be an integer-like scalar >= 1.", call. = FALSE)
+      }
+      resolved_engine_args$aghq_k <- as.integer(round(k))
+    }
+    if ("optimizer" %in% names(resolved_engine_args)) {
+      opt <- resolved_engine_args$optimizer
+      if (!is.character(opt) || length(opt) != 1L || !nzchar(opt)) {
+        stop("`optimizer` must be a non-empty character scalar.", call. = FALSE)
+      }
+    }
+  }
+
+  if (engine == "TMB") {
+    if ("iterations" %in% names(resolved_engine_args)) {
+      it <- resolved_engine_args$iterations
+      if (!is_scalar_integerish(it) || it < 1) {
+        stop("`iterations` must be an integer-like scalar >= 1.", call. = FALSE)
+      }
+      resolved_engine_args$iterations <- as.integer(round(it))
+    }
+    if ("hess_control_parscale" %in% names(resolved_engine_args)) {
+      ps <- resolved_engine_args$hess_control_parscale
+      if (!(is.null(ps) || is.numeric(ps))) {
+        stop("`hess_control_parscale` must be numeric or NULL.", call. = FALSE)
+      }
+    }
+    if ("hess_control_ndeps" %in% names(resolved_engine_args)) {
+      nd <- resolved_engine_args$hess_control_ndeps
+      if (!is.numeric(nd) || length(nd) != 1L || !is.finite(nd) || nd <= 0) {
+        stop("`hess_control_ndeps` must be a numeric scalar > 0.", call. = FALSE)
+      }
+    }
+  }
+
+  resolved_engine_args
 }
 
 #' Build the TMB ADFun object for multi-map disaggregation
@@ -412,4 +650,3 @@ validate_timevarying_covariates <- function(covariate_rasters_list,
 
   invisible(TRUE)
 }
-
