@@ -57,24 +57,60 @@ disag_model_mmap_aghq <- function(data,
   if (is.null(optimizer)) {
     optimizer <- "BFGS"
   }
-  # if (!optimizer %in% c("BFGS", "sparse_trust", "trust")) {
-  #   stop("`optimizer` must be one of 'BFGS', 'sparse_trust', or 'trust'.")
-  # }
   if (verbose) {
     message("Using optimizer: ", optimizer)
   }
 
-  control <- aghq::default_control_tmb(method = optimizer)
-
   #-- 4. Run AGHQ --
+  message("Fitting ", family, " disaggregation model via AGHQ (k = ", aghq_k, ").")
 
-  message("Fitting ", family," disaggregation model via AGHQ (k = ", aghq_k, ").")
-  aghq_model <- aghq::marginal_laplace_tmb(
-    obj,
-    k             = aghq_k,
-    startingvalue = obj$par,
-    control       = control
-  )
+  if (optimizer == "nlminb") {
+    # nlminb is not supported by CRAN aghq's optimize_theta(), so we run it
+    # manually and pass pre-computed results via the optresults parameter.
+    # This mirrors the exact computation that the nripstein/aghq fork performs
+    # internally: nlminb for optimization, numDeriv::jacobian with Richardson
+    # extrapolation for the Hessian.
+    opt <- stats::nlminb(obj$par, obj$fn, obj$gr)
+
+    if (opt$convergence != 0) {
+      warning("nlminb optimizer did not converge (code ", opt$convergence, "): ", opt$message)
+    }
+
+    # Hessian of obj$fn (neg-log-posterior) at mode — positive definite.
+    # Uses Richardson extrapolation on obj$gr, matching the fork's approach.
+    hess <- numDeriv::jacobian(obj$gr, opt$par, method = "Richardson")
+
+    # Structure mirrors what aghq::optimize_theta() returns internally:
+    # - ff$fn/gr/he: log-posterior (negated TMB objective) for quadrature evaluation
+    # - hessian: Hessian of neg-log-posterior (positive definite) for quadrature grid
+    # - mode: parameter values at the posterior mode
+    optresults <- list(
+      ff = list(
+        fn = function(x) -obj$fn(x),
+        gr = function(x) -obj$gr(x),
+        he = function(x) -numDeriv::jacobian(obj$gr, x, method = "Richardson")
+      ),
+      mode        = opt$par,
+      hessian     = hess,
+      convergence = opt$convergence
+    )
+
+    aghq_model <- aghq::marginal_laplace_tmb(
+      obj,
+      k             = aghq_k,
+      startingvalue = opt$par,
+      optresults    = optresults
+    )
+  } else {
+    # Standard path: delegate optimization entirely to aghq
+    control <- aghq::default_control_tmb(method = optimizer)
+    aghq_model <- aghq::marginal_laplace_tmb(
+      obj,
+      k             = aghq_k,
+      startingvalue = obj$par,
+      control       = control
+    )
+  }
 
   # RENAME
   coef_meta  <- compute_coef_meta(data)

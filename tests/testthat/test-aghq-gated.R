@@ -93,6 +93,21 @@ test_that("summary.disag_model_mmap_aghq normalizes time-varying slope names (ga
   expect_false(any(grepl("^slope_t", rn)))
 })
 
+test_that("AGHQ with nlminb optimizer returns expected fit contract (gated)", {
+  skip_if_aghq_opted_out()
+  bundle <- suppressWarnings(
+    get_cached_aghq_fit("aghq_small_onecov_shared", optimizer = "nlminb")
+  )
+  fit <- bundle$fit
+
+  expect_s3_class(fit, "disag_model_mmap_aghq")
+  expect_s3_class(fit, "disag_model_mmap")
+  expect_true(all(c("aghq_model", "obj", "data", "sd_out", "model_setup") %in% names(fit)))
+  expect_true(is.character(fit$model_setup$theta_order))
+  expect_true(length(fit$model_setup$theta_order) > 0L)
+  expect_true(is.list(fit$model_setup$beta_index_map))
+})
+
 test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
   skip_if_aghq_opted_out()
   data_obj <- get_cached_aghq_prepared_data("aghq_small_twocov_mesh")

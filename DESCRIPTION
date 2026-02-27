@@ -20,13 +20,14 @@ Encoding: UTF-8
 LazyData: true
 Depends: TMB, RcppEigen
 LinkingTo: TMB, RcppEigen
-Imports: 
+Imports:
     aghq,
     cowplot,
     disaggregation,
     fmesher,
     ggplot2,
     Matrix,
+    numDeriv,
     rSPDE,
     sf,
     sparseMVN,
