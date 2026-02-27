@@ -19,9 +19,3 @@ A ggplot2 object.
 \description{
 Draws the prepared polygons colored by the response variable, with an optional title.
 }
-\examples{
-# default, with title
-p1 <- plot_polygons(my_disag_data, time = 2)
-# no title
-p2 <- plot_polygons(my_disag_data, time = 2, show_title = FALSE)
-}
