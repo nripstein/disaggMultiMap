@@ -118,12 +118,14 @@ test_that("AGHQ shared-betas fit with two covariates maps slope names and order 
       engine = "AGHQ",
       family = "poisson",
       link = "log",
-      aghq_k = 1,
+      engine.args = list(
+        aghq_k = 1,
+        optimizer = "BFGS"
+      ),
       field = TRUE,
       iid = TRUE,
       time_varying_betas = FALSE,
-      silent = TRUE,
-      optimizer = "BFGS"
+      silent = TRUE
     )
   )
 
