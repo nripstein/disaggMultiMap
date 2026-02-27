@@ -7,11 +7,6 @@
 #' @param time Integer index of time-slice to plot (default = 1).
 #' @param show_title Logical; if TRUE (default), add a title "Response at time X".
 #' @return A ggplot2 object.
-#' @examples
-#' # default, with title
-#' p1 <- plot_polygons(my_disag_data, time = 2)
-#' # no title
-#' p2 <- plot_polygons(my_disag_data, time = 2, show_title = FALSE)
 #' @export
 plot_polygons <- function(disag_data,
                           time = 1,
