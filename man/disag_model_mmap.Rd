@@ -2,7 +2,7 @@
 % Please edit documentation in R/fitting.R
 \name{disag_model_mmap}
 \alias{disag_model_mmap}
-\title{Fit a multi‑map disaggregation model (via AGHQ or TMB)}
+\title{Fit a multi-map disaggregation model (via AGHQ or TMB)}
 \usage{
 disag_model_mmap(
   data,
@@ -31,15 +31,15 @@ disag_model_mmap(
 
 \item{link}{One of \code{"identity"}, \code{"logit"}, or \code{"log"}.}
 
-\item{engine}{Character; either "AGHQ" or "TMB"}
+\item{engine}{Character; either \code{"AGHQ"} or \code{"TMB"}.}
 
-\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+\item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect.}
 
 \item{engine.args}{Optional named list of engine-specific options.
 Supported keys:
 \itemize{
-\item AGHQ: \code{aghq_k}, \code{optimizer}
-\item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
+  \item AGHQ: \code{aghq_k}, \code{optimizer}
+  \item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
 }}
 
 \item{aghq_k}{Deprecated at wrapper level; use \code{engine.args = list(aghq_k = ...)}.
@@ -63,7 +63,7 @@ are deprecated in this wrapper and should be moved to \code{engine.args}.}
 }
 \value{
 A fitted model object of class \code{disag_model_mmap_tmb} or
-\code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
+  \code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
 }
 \description{
 Top-level fitting wrapper with engine dispatch and engine-specific argument

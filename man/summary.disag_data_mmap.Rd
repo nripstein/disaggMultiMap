@@ -4,10 +4,12 @@
 \alias{summary.disag_data_mmap}
 \title{Summary function for disag_data_mmap objects}
 \usage{
-\method{summary}{disag_data_mmap}(object)
+\method{summary}{disag_data_mmap}(object, ...)
 }
 \arguments{
 \item{object}{A 'disag_data_mmap' object (from 'prepare_data_mmap()').}
+
+\item{...}{Additional arguments (unused).}
 }
 \value{
 Invisibly returns a list with components:

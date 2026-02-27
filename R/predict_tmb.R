@@ -81,8 +81,6 @@ predict.disag_model_mmap_tmb <- function(object, new_data = NULL,
 #' @param model_output A 'disag_model_mmap_tmb' model fit.
 #' @param new_data Optional SpatRaster (or list) of new covariates.
 #' @param predict_iid Logical; if TRUE, include the IID polygon effect.
-#' @param ... Unused.
-#'
 #' @return A list with components:
 #'   - prediction: SpatRaster of the mean prediction on the response scale.
 #'   - field: SpatRaster of the spatial field component (or NULL).
@@ -119,8 +117,6 @@ predict_model_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
 #' @param predict_iid Logical; if TRUE, include the IID polygon effect.
 #' @param N Integer; number of Monte Carlo draws (default 100).
 #' @param CI Numeric in (0,1); credible‐interval level (default 0.95).
-#' @param ... Unused.
-#'
 #' @return A list with components:
 #'   - realisations: list of SpatRasters of each draw.
 #'   - predictions_ci: list with 'lower' and 'upper' SpatRaster stacks.
@@ -201,7 +197,7 @@ predict_uncertainty_mmap <- function(model_output, new_data = NULL,
 #'   - iid_objects: list with 'shapefile' and 'template' (or NULL).
 #' @keywords internal
 setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALSE, time_index = NULL, use_training = FALSE) {
-  new_data <- disaggregation:::check_new_data(new_data, model_output)
+  new_data <- disagg_check_new_data(new_data, model_output)
 
   data <- model_output$data
 
@@ -254,7 +250,7 @@ setup_objects_mmap <- function(model_output, new_data = NULL, predict_iid = FALS
   data$covariate_rasters <- covariates
 
   if (model_output$model_setup$field) {
-    coords <- if (is.null(new_data)) data$coords_for_prediction else disaggregation:::getCoords(data)
+    coords <- if (is.null(new_data)) data$coords_for_prediction else disagg_get_coords(data)
     Amatrix <- fmesher::fm_evaluator(data$mesh, loc = as.matrix(coords))$proj$A
     # Sanity check projector against mesh nodes
     if (ncol(Amatrix) != nrow(data$mesh$loc)) {

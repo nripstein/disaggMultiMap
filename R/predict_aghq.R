@@ -303,7 +303,7 @@ predict.disag_model_mmap_aghq <- function(object,
 
     # 7. Compute cellwise CIs
     probs <- c((1 - CI) / 2, 1 - (1 - CI) / 2)
-    ci_mat <- apply(lam_mat, 1, quantile, probs = probs, na.rm = TRUE)
+    ci_mat <- apply(lam_mat, 1, stats::quantile, probs = probs, na.rm = TRUE)
     ci_low[[i]] <- terra::rast(cbind(coords, y = ci_mat[1, ]), type = "xyz")
     ci_high[[i]] <- terra::rast(cbind(coords, y = ci_mat[2, ]), type = "xyz")
   }

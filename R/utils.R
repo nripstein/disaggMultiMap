@@ -48,7 +48,7 @@ get_priors <- function(data) {
   if (mean(resp, na.rm = TRUE) == 0) {
     calc_sigma_max <- 1.0
   } else {
-    calc_sigma_max <- sd(resp / mean(resp, na.rm = TRUE), na.rm = TRUE)
+    calc_sigma_max <- stats::sd(resp / mean(resp, na.rm = TRUE), na.rm = TRUE)
   }
 
   # 3. Assemble the full list of defaults

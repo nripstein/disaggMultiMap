@@ -43,15 +43,15 @@ disag_model_mmap_tmb <- function(data,
   if(!is.null(priors)) stopifnot(inherits(priors, 'list'))
   stopifnot(is.numeric(iterations))
 
-  obj <- disaggMultiMap:::make_model_object_mmap(data = data,
-                                                 priors = priors,
-                                                 family = family,
-                                                 link = link,
-                                                 time_varying_betas = time_varying_betas,
-                                                 field = field,
-                                                 iid = iid,
-                                                 silent = silent,
-                                                 starting_values = starting_values)
+  obj <- make_model_object_mmap(data = data,
+                                priors = priors,
+                                family = family,
+                                link = link,
+                                time_varying_betas = time_varying_betas,
+                                field = field,
+                                iid = iid,
+                                silent = silent,
+                                starting_values = starting_values)
 
   message("Fitting ", family," disaggregation model via TMB.")
   opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
@@ -59,7 +59,7 @@ disag_model_mmap_tmb <- function(data,
 
   if(opt$convergence != 0) warning('The model did not converge. Try changing starting_values')
 
-  hess_control <- disaggregation:::setup_hess_control(opt, hess_control_parscale, hess_control_ndeps)
+  hess_control <- disagg_setup_hess_control(opt, hess_control_parscale, hess_control_ndeps)
   hess <- stats::optimHess(opt$par, fn = obj$fn, gr = obj$gr, control = hess_control)
 
   sd_out <- TMB::sdreport(obj, getJointPrecision = TRUE, hessian.fixed = hess)

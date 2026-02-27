@@ -210,9 +210,9 @@ resolve_engine_args_mmap <- function(engine,
 
   resolved <- engine_spec$defaults
   source_map <- if (length(resolved)) {
-    setNames(rep("default", length(resolved)), names(resolved))
+    stats::setNames(rep("default", length(resolved)), names(resolved))
   } else {
-    setNames(character(0), character(0))
+    stats::setNames(character(0), character(0))
   }
 
   apply_source <- function(src_list, source_label) {
@@ -405,7 +405,7 @@ make_model_object_mmap <- function(data,
       v <- tapply(
         data$covariate_data[[col]],
         data$covariate_data$poly_local_id,
-        var,
+        stats::var,
         na.rm = TRUE
       )
       zero_var_pols <- names(v)[!is.finite(v) | v == 0]
@@ -413,7 +413,7 @@ make_model_object_mmap <- function(data,
       if (n_zero > 0) {
         msg_list <- paste(zero_var_pols, collapse = ", ")
         if (n_zero > 10) {
-          msg_list <- paste0(paste(head(zero_var_pols, 10), collapse = ", "), ", ...")
+          msg_list <- paste0(paste(utils::head(zero_var_pols, 10), collapse = ", "), ", ...")
         }
         message(sprintf(
           "Covariate '%s' has zero variance in %d/%d polygons (%s). Poisson models may be unidentifiable.",
@@ -432,7 +432,7 @@ make_model_object_mmap <- function(data,
   bbox <- sf::st_bbox(data$polygon_shapefile_list[[1]])
   diag_len <- sqrt((bbox$xmax - bbox$xmin)^2 + (bbox$ymax - bbox$ymin)^2)
   prior_rho <- diag_len / 3
-  prior_sigma <- sd(data$polygon_data$response / mean(data$polygon_data$response))
+  prior_sigma <- stats::sd(data$polygon_data$response / mean(data$polygon_data$response))
 
   default_priors <- list(
     priormean_intercept     = 0,
@@ -453,7 +453,7 @@ make_model_object_mmap <- function(data,
     if (length(invalid)) {
       stop("Invalid prior names: ", paste(invalid, collapse = ", "))
     }
-    final_priors <- modifyList(default_priors, priors)
+    final_priors <- utils::modifyList(default_priors, priors)
   } else {
     final_priors <- default_priors
   }
@@ -509,7 +509,7 @@ make_model_object_mmap <- function(data,
   parameters <- if (is.null(starting_values)) {
     default_parameters
   } else {
-    modifyList(default_parameters, starting_values)
+    utils::modifyList(default_parameters, starting_values)
   }
 
   # rename covariates

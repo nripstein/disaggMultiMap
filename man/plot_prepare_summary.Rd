@@ -4,7 +4,7 @@
 \alias{plot_prepare_summary}
 \title{Visual summary plot of prepared data}
 \usage{
-\method{plot}{disag_data_mmap}(disag_data, covariate = 1, time = 1, max_categories = 10)
+plot_prepare_summary(disag_data, covariate = 1, time = 1, max_categories = 10)
 }
 \arguments{
 \item{disag_data}{A `disag_data_mmap` object.}
@@ -22,3 +22,4 @@ A ggdraw object (from cowplot) which can be printed.
 Combines polygons, aggregation raster, mesh, and (if present) a covariate
 into a 2×2 grid.
 }
+\keyword{internal}
