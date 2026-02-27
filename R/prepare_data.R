@@ -420,11 +420,11 @@ prepare_time_point <- function(t,
 
   #-- 5. Compute coordinates for mesh & prediction --
   raster_for_coords <- if (is.null(cov_rasters)) agg_raster else cov_rasters
-  coords_fit <- disaggregation:::extractCoordsForMesh(
+  coords_fit <- disagg_extract_coords_for_mesh(
     raster_for_coords,
     selectIds = cov_data$cell
   )
-  coords_pred <- disaggregation:::extractCoordsForMesh(raster_for_coords)
+  coords_pred <- disagg_extract_coords_for_mesh(raster_for_coords)
 
   #-- 6. Compute start/end indices for each polygon --
   start_end_index <- getStartendindex_mmap(

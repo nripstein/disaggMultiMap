@@ -14,6 +14,7 @@
 #' @param iid Logical: include polygon-specific IID effects?
 #' @param silent Logical: if TRUE, suppress TMB's console output.
 #' @param starting_values Optional named list of starting parameter values.
+#' @param optimizer Optional optimizer name passed to AGHQ control.
 #' @param verbose Logical: if TRUE, print total runtime.
 #' @return An object of class 'disag_model_mmap_aghq' (a list with '$aghq_model', '$data', and '$model_setup').
 #' @export

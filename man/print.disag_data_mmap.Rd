@@ -4,10 +4,12 @@
 \alias{print.disag_data_mmap}
 \title{Print method for 'disag_data_mmap' objects}
 \usage{
-\method{print}{disag_data_mmap}(object)
+\method{print}{disag_data_mmap}(x, ...)
 }
 \arguments{
-\item{object}{A 'disag_data_mmap' object.}
+\item{x}{A 'disag_data_mmap' object.}
+
+\item{...}{Additional arguments (unused).}
 }
 \value{
 Invisibly returns the original 'disag_data_mmap' object.

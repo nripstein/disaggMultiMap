@@ -18,7 +18,6 @@ Description: Provides tools for spatio-temporal disaggregation of areal data acr
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Depends: TMB, RcppEigen
 LinkingTo: TMB, RcppEigen
 Imports:
     aghq,

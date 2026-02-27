@@ -17,8 +17,6 @@ predict_model_mmap(
 \item{new_data}{Optional SpatRaster (or list) of new covariates.}
 
 \item{predict_iid}{Logical; if TRUE, include the IID polygon effect.}
-
-\item{...}{Unused.}
 }
 \value{
 A list with components:

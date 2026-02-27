@@ -10,6 +10,8 @@
 \item{x}{A 'disag_model_mmap_aghq' object.}
 
 \item{...}{Additional arguments (not used).}
+
+\item{max_print}{Maximum number of random effects details to print.}
 }
 \value{
 Invisibly returns the original 'disag_model_mmap_aghq' object.

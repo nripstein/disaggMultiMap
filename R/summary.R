@@ -5,6 +5,7 @@
 #' sizes, number of covariates and their summaries and a mesh summary
 #'
 #' @param object A 'disag_data_mmap' object (from 'prepare_data_mmap()').
+#' @param ... Additional arguments (unused).
 #' @return Invisibly returns a list with components:
 #'   - 'n_times', 'n_polygons', 'n_pixels'
 #'   - 'per_time': data.frame with 'time', 'min_pixels', 'max_pixels'
@@ -12,19 +13,19 @@
 #'   - 'mesh_nodes', 'mesh_triangles'
 #' @method summary disag_data_mmap
 #' @export
-summary.disag_data_mmap <- function(object) {
+summary.disag_data_mmap <- function(object, ...) {
   # 1. Basic counts
   n_times <- length(object$time_points)
   n_polygons <- nrow(object$polygon_data)
   n_pixels <- nrow(object$covariate_data)
 
-  cat("Disaggregation data (multi‐map) summary\n")
+  cat("Disaggregation data (multi-map) summary\n")
   cat("========================================\n")
   cat(sprintf("Time points: %d\n", n_times))
   cat(sprintf("Total polygons: %d\n", n_polygons))
   cat(sprintf("Total pixels: %d\n\n", n_pixels))
 
-  # 2. Per‐time polygon size
+  # 2. Per-time polygon size
   per_time <- do.call(rbind, lapply(seq_len(n_times), function(t) {
     pix_idx <- object$covariate_data$time == t
     ct <- table(object$covariate_data$poly_local_id[pix_idx])
@@ -34,7 +35,7 @@ summary.disag_data_mmap <- function(object) {
       max_pixels = max(ct)
     )
   }))
-  cat("Per‐time polygon sizes (pixels):\n")
+  cat("Per-time polygon sizes (pixels):\n")
   print(per_time)
   cat("\n")
 
@@ -88,24 +89,25 @@ summary.disag_data_mmap <- function(object) {
 #' Displays a brief overview of a multi-map disaggregation dataset:
 #' number of time points, total polygons, and total pixels.
 #'
-#' @param object A 'disag_data_mmap' object.
+#' @param x A 'disag_data_mmap' object.
+#' @param ... Additional arguments (unused).
 #'
 #' @return Invisibly returns the original 'disag_data_mmap' object.
 #' @method print disag_data_mmap
 #' @export
-print.disag_data_mmap <- function(object) {
-  n_times <- length(object$time_points)
-  n_polygons <- nrow(object$polygon_data)
-  n_pixels <- nrow(object$covariate_data)
+print.disag_data_mmap <- function(x, ...) {
+  n_times <- length(x$time_points)
+  n_polygons <- nrow(x$polygon_data)
+  n_pixels <- nrow(x$covariate_data)
 
-  cat("Disaggregation data (multi‐map) info\n")
+  cat("Disaggregation data (multi-map) info\n")
   cat("=====================================\n")
   cat(sprintf("Time points: %d\n", n_times))
   cat(sprintf("Total polygons: %d\n", n_polygons))
   cat(sprintf("Total pixels: %d\n\n", n_pixels))
 
   cat("Use `summary(...)` for more details.\n")
-  return(invisible(object))
+  return(invisible(x))
 }
 
 
@@ -117,6 +119,7 @@ print.disag_data_mmap <- function(object) {
 #'
 #' @param x A 'disag_model_mmap_aghq' object.
 #' @param ... Additional arguments (not used).
+#' @param max_print Maximum number of random effects details to print.
 #'
 #' @return Invisibly returns the original 'disag_model_mmap_aghq' object.
 #' @method print disag_model_mmap_aghq

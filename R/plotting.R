@@ -377,8 +377,7 @@ plot_mesh <- function(disag_data,
 #' @param time Integer time‐slice (default = 1).
 #' @param max_categories Maximum number of unique values to consider categorical (default = 10).
 #' @return A ggdraw object (from cowplot) which can be printed.
-#' @method plot disag_data_mmap
-#' @export
+#' @keywords internal
 plot_prepare_summary <- function(disag_data,
                                  covariate = 1,
                                  time = 1,

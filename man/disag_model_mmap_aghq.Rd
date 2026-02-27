@@ -40,6 +40,8 @@ disag_model_mmap_aghq(
 
 \item{starting_values}{Optional named list of starting parameter values.}
 
+\item{optimizer}{Optional optimizer name passed to AGHQ control.}
+
 \item{verbose}{Logical: if TRUE, print total runtime.}
 }
 \value{
