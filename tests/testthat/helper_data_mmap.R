@@ -158,6 +158,23 @@ make_fixture_fit_tmb <- function(seed = 10L,
   )
 }
 
+# Test controls:
+# - Default family is negative binomial.
+# - Set USE_POISSON_TESTS=true (or 1/yes) to run family-driven tests in Poisson mode.
+get_test_family_mmap <- function() {
+  use_poisson <- tolower(Sys.getenv("USE_POISSON_TESTS", "false")) %in% c("1", "true", "yes")
+  if (isTRUE(use_poisson)) "poisson" else "negbinomial"
+}
+
+# AGHQ optimizer policy for tests:
+# - NB uses nlminb (more stable for current NB path)
+# - Poisson uses BFGS (existing baseline behavior)
+get_test_aghq_optimizer_mmap <- function(family = get_test_family_mmap()) {
+  if (identical(family, "negbinomial")) return("nlminb")
+  if (identical(family, "poisson")) return("BFGS")
+  stop("Unsupported family for AGHQ test optimizer mapping: ", family)
+}
+
 .mmap_fit_cache <- new.env(parent = emptyenv())
 .mmap_prepare_cache <- new.env(parent = emptyenv())
 .mmap_aghq_prepare_cache <- new.env(parent = emptyenv())
@@ -226,7 +243,7 @@ get_cached_prepared_data <- function(name = c(
 get_cached_tmb_fit <- function(name = "default",
                                seed = 10L,
                                iterations = 60,
-                               family = "poisson",
+                               family = get_test_family_mmap(),
                                link = "log",
                                field = TRUE,
                                iid = FALSE,
@@ -265,7 +282,7 @@ get_core_field_fit <- function() {
     name = "fit_core_field",
     seed = 10L,
     iterations = 60,
-    family = "poisson",
+    family = get_test_family_mmap(),
     link = "log",
     field = TRUE,
     iid = FALSE,
@@ -278,7 +295,7 @@ get_core_nofield_fit <- function() {
     name = "fit_core_nofield",
     seed = 10L,
     iterations = 20,
-    family = "poisson",
+    family = get_test_family_mmap(),
     link = "log",
     field = FALSE,
     iid = FALSE,
@@ -327,12 +344,13 @@ get_cached_aghq_prepared_data <- function(name = c(
 
 get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
                                 aghq_k = 1,
-                                optimizer = "BFGS",
+                                family = get_test_family_mmap(),
+                                optimizer = get_test_aghq_optimizer_mmap(family),
                                 field = TRUE,
                                 iid = TRUE,
                                 time_varying_betas = FALSE,
                                 use_legacy_args = FALSE) {
-  key <- paste(name, aghq_k, optimizer, field, iid, time_varying_betas, use_legacy_args, sep = "|")
+  key <- paste(name, aghq_k, family, optimizer, field, iid, time_varying_betas, use_legacy_args, sep = "|")
   if (exists(key, envir = .mmap_aghq_fit_cache, inherits = FALSE)) {
     return(get(key, envir = .mmap_aghq_fit_cache, inherits = FALSE))
   }
@@ -347,7 +365,7 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
     fit <- disag_model_mmap(
       data = prepared,
       engine = "AGHQ",
-      family = "poisson",
+      family = family,
       link = "log",
       aghq_k = aghq_k,
       field = field,
@@ -360,7 +378,7 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
     fit <- disag_model_mmap(
       data = prepared,
       engine = "AGHQ",
-      family = "poisson",
+      family = family,
       link = "log",
       engine.args = list(
         aghq_k = aghq_k,

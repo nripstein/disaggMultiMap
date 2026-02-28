@@ -7,13 +7,14 @@ test_that("disag_model_mmap AGHQ returns expected fit contract (gated)", {
   skip_if_aghq_opted_out()
   bundle <- suppressWarnings(get_cached_aghq_fit("aghq_small_onecov_shared"))
   fit <- bundle$fit
+  family <- get_test_family_mmap()
 
   expect_s3_class(fit, "disag_model_mmap_aghq")
   expect_s3_class(fit, "disag_model_mmap")
   expect_true(all(c("aghq_model", "obj", "data", "sd_out", "model_setup") %in% names(fit)))
 
   expect_true(is.list(fit$model_setup))
-  expect_equal(fit$model_setup$family, "poisson")
+  expect_equal(fit$model_setup$family, family)
   expect_equal(fit$model_setup$link, "log")
   expect_true(isTRUE(fit$model_setup$field))
   expect_true(isTRUE(fit$model_setup$iid))
@@ -111,16 +112,18 @@ test_that("AGHQ with nlminb optimizer returns expected fit contract (gated)", {
 test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
   skip_if_aghq_opted_out()
   data_obj <- get_cached_aghq_prepared_data("aghq_small_twocov_mesh")
+  family <- get_test_family_mmap()
+  optimizer <- get_test_aghq_optimizer_mmap(family)
 
   fit <- suppressWarnings(
     disag_model_mmap(
       data = data_obj,
       engine = "AGHQ",
-      family = "poisson",
+      family = family,
       link = "log",
       engine.args = list(
         aghq_k = 1,
-        optimizer = "BFGS"
+        optimizer = optimizer
       ),
       field = TRUE,
       iid = TRUE,
