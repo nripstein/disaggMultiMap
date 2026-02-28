@@ -370,3 +370,153 @@ print.summary.disag_model_mmap_aghq <- function(x, ...) {
   # Return invisibly
   return(invisible(x))
 }
+
+
+#' Print method for 'disag_model_mmap_mcmc' objects
+#'
+#' @description
+#' Displays a brief overview of a multi-map disaggregation model fit via MCMC.
+#'
+#' @param x A 'disag_model_mmap_mcmc' object.
+#' @param ... Additional arguments (not used).
+#'
+#' @return Invisibly returns the original 'disag_model_mmap_mcmc' object.
+#' @method print disag_model_mmap_mcmc
+#' @export
+print.disag_model_mmap_mcmc <- function(x, ...) {
+  if (!inherits(x, "disag_model_mmap_mcmc")) {
+    stop("Object must be of class 'disag_model_mmap_mcmc'.", call. = FALSE)
+  }
+
+  model_info <- tryCatch({
+    list(
+      family = x$model_setup$family,
+      link = x$model_setup$link,
+      field = isTRUE(x$model_setup$field),
+      iid = isTRUE(x$model_setup$iid),
+      tv = isTRUE(x$model_setup$time_varying_betas)
+    )
+  }, error = function(e) {
+    list(family = "unknown", link = "unknown", field = NA, iid = NA, tv = NA)
+  })
+
+  n_draws <- tryCatch(nrow(as.matrix(x$mcmc_fit)), error = function(e) NA_integer_)
+  n_par <- tryCatch(ncol(as.matrix(x$mcmc_fit)), error = function(e) NA_integer_)
+
+  cat("Disaggregation model (multi-map) fit with MCMC (tmbstan)\n")
+  cat("=======================================================\n")
+  cat(sprintf("Family: %s\n", model_info$family))
+  cat(sprintf("Link function: %s\n", model_info$link))
+  cat(sprintf("Spatial field included: %s\n", ifelse(isTRUE(model_info$field), "Yes", "No")))
+  cat(sprintf("IID effects included: %s\n", ifelse(isTRUE(model_info$iid), "Yes", "No")))
+  cat(sprintf("Time-varying betas: %s\n", ifelse(isTRUE(model_info$tv), "Yes", "No")))
+  cat(sprintf("Posterior draws: %s\n", ifelse(is.na(n_draws), "Unknown", as.character(n_draws))))
+  cat(sprintf("Stored columns: %s\n", ifelse(is.na(n_par), "Unknown", as.character(n_par))))
+
+  if (!is.null(x$engine_args_used) && length(x$engine_args_used)) {
+    keys <- intersect(c("chains", "iter", "warmup", "thin", "cores"), names(x$engine_args_used))
+    if (length(keys)) {
+      vals <- vapply(keys, function(k) as.character(x$engine_args_used[[k]]), character(1))
+      cat("Sampler settings: ", paste(paste(keys, vals, sep = "="), collapse = ", "), "\n", sep = "")
+    }
+  }
+
+  cat("\nUse `summary(...)` for aggregate posterior parameter summaries.\n")
+  invisible(x)
+}
+
+
+#' Summary method for 'disag_model_mmap_mcmc' objects
+#'
+#' @description
+#' Computes simple posterior summaries (mean, sd, and central intervals)
+#' from the stored MCMC draws.
+#'
+#' @param object A 'disag_model_mmap_mcmc' object.
+#' @param probs Numeric vector of length 2 giving lower and upper quantile
+#'   probabilities (default c(0.025, 0.975)).
+#' @param ... Additional arguments (not used).
+#'
+#' @return An object of class 'summary.disag_model_mmap_mcmc'.
+#' @method summary disag_model_mmap_mcmc
+#' @export
+summary.disag_model_mmap_mcmc <- function(object, probs = c(0.025, 0.975), ...) {
+  if (!inherits(object, "disag_model_mmap_mcmc")) {
+    stop("Object must be of class 'disag_model_mmap_mcmc'.", call. = FALSE)
+  }
+  if (!is.numeric(probs) || length(probs) != 2L || any(!is.finite(probs)) || probs[1] < 0 || probs[2] > 1 || probs[1] >= probs[2]) {
+    stop("`probs` must be length-2 numeric with 0 <= probs[1] < probs[2] <= 1.", call. = FALSE)
+  }
+
+  draws <- extract_mcmc_draws_matrix_mmap(object$mcmc_fit)
+
+  summary_tab <- t(apply(draws, 2, function(x) {
+    c(
+      mean = mean(x, na.rm = TRUE),
+      sd = stats::sd(x, na.rm = TRUE),
+      q_low = stats::quantile(x, probs = probs[1], na.rm = TRUE),
+      q_high = stats::quantile(x, probs = probs[2], na.rm = TRUE)
+    )
+  }))
+  summary_tab <- as.data.frame(summary_tab)
+
+  out <- list(
+    model_info = list(
+      family = object$model_setup$family,
+      link = object$model_setup$link,
+      field = isTRUE(object$model_setup$field),
+      iid = isTRUE(object$model_setup$iid),
+      time_varying_betas = isTRUE(object$model_setup$time_varying_betas)
+    ),
+    n_draws = nrow(draws),
+    n_parameters = ncol(draws),
+    probs = probs,
+    posterior_summary = summary_tab
+  )
+  class(out) <- c("summary.disag_model_mmap_mcmc", "list")
+  out
+}
+
+
+#' Print method for 'summary.disag_model_mmap_mcmc' objects
+#'
+#' @description
+#' Displays model metadata and posterior summaries for an MCMC fit.
+#'
+#' @param x A 'summary.disag_model_mmap_mcmc' object.
+#' @param max_print Maximum number of parameters to print.
+#' @param ... Additional arguments (not used).
+#'
+#' @return Invisibly returns the original summary object.
+#' @method print summary.disag_model_mmap_mcmc
+#' @export
+print.summary.disag_model_mmap_mcmc <- function(x, max_print = 30, ...) {
+  if (!inherits(x, "summary.disag_model_mmap_mcmc")) {
+    stop("Object must be of class 'summary.disag_model_mmap_mcmc'.", call. = FALSE)
+  }
+
+  cat("Summary of disaggregation model (multi-map) fit with MCMC (tmbstan)\n")
+  cat("===================================================================\n")
+  cat(sprintf("Family: %s\n", x$model_info$family))
+  cat(sprintf("Link function: %s\n", x$model_info$link))
+  cat(sprintf("Spatial field included: %s\n", ifelse(x$model_info$field, "Yes", "No")))
+  cat(sprintf("IID effects included: %s\n", ifelse(x$model_info$iid, "Yes", "No")))
+  cat(sprintf("Time-varying betas: %s\n", ifelse(x$model_info$time_varying_betas, "Yes", "No")))
+  cat(sprintf("Posterior draws: %d\n", x$n_draws))
+  cat(sprintf("Parameters summarized: %d\n", x$n_parameters))
+  cat(sprintf("Interval probs: [%.3f, %.3f]\n", x$probs[1], x$probs[2]))
+
+  tab <- x$posterior_summary
+  n_show <- min(nrow(tab), as.integer(max_print))
+  if (n_show > 0L) {
+    cat("\nPosterior parameter summaries:\n")
+    print(utils::head(tab, n_show))
+    if (nrow(tab) > n_show) {
+      cat(sprintf("\n... (%d additional parameters omitted; increase `max_print` to view all)\n", nrow(tab) - n_show))
+    }
+  } else {
+    cat("\nNo posterior parameters available to print.\n")
+  }
+
+  invisible(x)
+}

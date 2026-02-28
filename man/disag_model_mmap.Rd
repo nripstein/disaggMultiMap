@@ -2,14 +2,14 @@
 % Please edit documentation in R/fitting.R
 \name{disag_model_mmap}
 \alias{disag_model_mmap}
-\title{Fit a multi-map disaggregation model (via AGHQ or TMB)}
+\title{Fit a multi-map disaggregation model (via AGHQ, TMB, or MCMC)}
 \usage{
 disag_model_mmap(
   data,
   priors = NULL,
   family = "poisson",
   link = "log",
-  engine = c("AGHQ", "TMB"),
+  engine = c("AGHQ", "TMB", "MCMC"),
   time_varying_betas = FALSE,
   engine.args = NULL,
   aghq_k = 2,
@@ -31,7 +31,7 @@ disag_model_mmap(
 
 \item{link}{One of \code{"identity"}, \code{"logit"}, or \code{"log"}.}
 
-\item{engine}{Character; either \code{"AGHQ"} or \code{"TMB"}.}
+\item{engine}{Character; one of \code{"AGHQ"}, \code{"TMB"}, or \code{"MCMC"}.}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect.}
 
@@ -40,6 +40,11 @@ Supported keys:
 \itemize{
   \item AGHQ: \code{aghq_k}, \code{optimizer}
   \item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
+  \item MCMC: commonly used \code{tmbstan} controls such as
+    \code{chains}, \code{iter}, \code{warmup}, \code{thin}, \code{cores},
+    \code{seed}, \code{laplace}, \code{debug}, \code{silent},
+    \code{lower}, and \code{upper}. Extra named keys are passed through
+    to \code{tmbstan::tmbstan()}.
 }}
 
 \item{aghq_k}{Deprecated at wrapper level; use \code{engine.args = list(aghq_k = ...)}.
@@ -62,8 +67,9 @@ Retained for backward compatibility.}
 are deprecated in this wrapper and should be moved to \code{engine.args}.}
 }
 \value{
-A fitted model object of class \code{disag_model_mmap_tmb} or
-  \code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
+A fitted model object of class \code{disag_model_mmap_tmb},
+  \code{disag_model_mmap_aghq}, or \code{disag_model_mmap_mcmc}
+  (all also inherit \code{disag_model_mmap}).
 }
 \description{
 Top-level fitting wrapper with engine dispatch and engine-specific argument

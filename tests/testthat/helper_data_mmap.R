@@ -162,6 +162,7 @@ make_fixture_fit_tmb <- function(seed = 10L,
 .mmap_prepare_cache <- new.env(parent = emptyenv())
 .mmap_aghq_prepare_cache <- new.env(parent = emptyenv())
 .mmap_aghq_fit_cache <- new.env(parent = emptyenv())
+.mmap_mcmc_fit_cache <- new.env(parent = emptyenv())
 
 get_cached_prepared_data <- function(name = c(
                                        "prep_default_mesh",
@@ -375,6 +376,44 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
 
   out <- list(data = prepared, fit = fit)
   assign(key, out, envir = .mmap_aghq_fit_cache)
+  out
+}
+
+
+get_cached_mcmc_fit <- function(name = "mcmc_small",
+                                chains = 1L,
+                                iter = 30L,
+                                warmup = 15L,
+                                cores = 1L,
+                                field = FALSE,
+                                iid = FALSE,
+                                time_varying_betas = FALSE) {
+  key <- paste(name, chains, iter, warmup, cores, field, iid, time_varying_betas, sep = "|")
+  if (exists(key, envir = .mmap_mcmc_fit_cache, inherits = FALSE)) {
+    return(get(key, envir = .mmap_mcmc_fit_cache, inherits = FALSE))
+  }
+
+  prepared <- get_cached_prepared_data("prep_default_mesh")
+  fit <- disag_model_mmap(
+    data = prepared,
+    engine = "MCMC",
+    family = "poisson",
+    link = "log",
+    engine.args = list(
+      chains = as.integer(chains),
+      iter = as.integer(iter),
+      warmup = as.integer(warmup),
+      cores = as.integer(cores),
+      refresh = 0
+    ),
+    field = field,
+    iid = iid,
+    time_varying_betas = time_varying_betas,
+    silent = TRUE
+  )
+
+  out <- list(data = prepared, fit = fit)
+  assign(key, out, envir = .mmap_mcmc_fit_cache)
   out
 }
 

@@ -1,4 +1,4 @@
-#' Fit a multi-map disaggregation model (via AGHQ or TMB)
+#' Fit a multi-map disaggregation model (via AGHQ, TMB, or MCMC)
 #'
 #' @description
 #' Top-level fitting wrapper with engine dispatch and engine-specific argument
@@ -8,13 +8,18 @@
 #' @param priors Optional named list of prior overrides.
 #' @param family One of \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"negbinomial"}.
 #' @param link One of \code{"identity"}, \code{"logit"}, or \code{"log"}.
-#' @param engine Character; either \code{"AGHQ"} or \code{"TMB"}.
+#' @param engine Character; one of \code{"AGHQ"}, \code{"TMB"}, or \code{"MCMC"}.
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect.
 #' @param engine.args Optional named list of engine-specific options.
 #'   Supported keys:
 #'   \itemize{
 #'     \item AGHQ: \code{aghq_k}, \code{optimizer}
 #'     \item TMB: \code{iterations}, \code{hess_control_parscale}, \code{hess_control_ndeps}
+#'     \item MCMC: commonly used \code{tmbstan} controls such as
+#'       \code{chains}, \code{iter}, \code{warmup}, \code{thin}, \code{cores},
+#'       \code{seed}, \code{laplace}, \code{debug}, \code{silent},
+#'       \code{lower}, and \code{upper}. Extra named keys are passed through
+#'       to \code{tmbstan::tmbstan()}.
 #'   }
 #' @param aghq_k Deprecated at wrapper level; use \code{engine.args = list(aghq_k = ...)}.
 #'   Retained for backward compatibility.
@@ -28,14 +33,15 @@
 #' @param ... Additional arguments. Engine-specific arguments passed via \code{...}
 #'   are deprecated in this wrapper and should be moved to \code{engine.args}.
 #'
-#' @return A fitted model object of class \code{disag_model_mmap_tmb} or
-#'   \code{disag_model_mmap_aghq} (both also inherit \code{disag_model_mmap}).
+#' @return A fitted model object of class \code{disag_model_mmap_tmb},
+#'   \code{disag_model_mmap_aghq}, or \code{disag_model_mmap_mcmc}
+#'   (all also inherit \code{disag_model_mmap}).
 #' @export
 disag_model_mmap <- function(data,
                              priors = NULL,
                              family = "poisson",
                              link   = "log",
-                             engine = c("AGHQ","TMB"),
+                             engine = c("AGHQ","TMB","MCMC"),
                              time_varying_betas = FALSE,
                              engine.args = NULL,
                              aghq_k = 2, # Deprecated wrapper argument; prefer engine.args$aghq_k
@@ -59,7 +65,12 @@ disag_model_mmap <- function(data,
   engine.args <- validate_engine_args_container(engine.args)
 
   # Extract named engine-specific arguments supplied via ... (deprecated path).
-  idx_engine_dots <- which(!is.na(dot_names) & nzchar(dot_names) & dot_names %in% engine_spec$engine_keys)
+  capture_all_named_dots <- isTRUE(engine_spec$capture_all_named_dots)
+  idx_engine_dots <- if (capture_all_named_dots) {
+    which(!is.na(dot_names) & nzchar(dot_names))
+  } else {
+    which(!is.na(dot_names) & nzchar(dot_names) & dot_names %in% engine_spec$engine_keys)
+  }
   dot_engine_args <- if (length(idx_engine_dots)) dots[idx_engine_dots] else list()
   passthrough_non_engine_dots <- if (length(idx_engine_dots)) dots[-idx_engine_dots] else dots
 
@@ -134,6 +145,21 @@ disag_model_mmap <- function(data,
     verbose            = verbose
   )
 
+  common_arg_names <- names(common_args)
+  overlap_with_common <- intersect(names(resolved_engine_args), common_arg_names)
+  if (length(overlap_with_common)) {
+    warning(
+      paste0(
+        "Ignoring `engine.args` key(s) that overlap with top-level wrapper arguments: ",
+        paste(overlap_with_common, collapse = ", "),
+        ". Top-level arguments take precedence."
+      ),
+      call. = FALSE
+    )
+    keep <- !(names(resolved_engine_args) %in% overlap_with_common)
+    resolved_engine_args <- resolved_engine_args[keep]
+  }
+
   dispatch_args <- c(common_args, resolved_engine_args, passthrough_non_engine_dots)
   do.call(engine_spec$fit_fun, dispatch_args)
 }
@@ -143,11 +169,32 @@ get_engine_specs_mmap <- function() {
     AGHQ = list(
       fit_fun = disag_model_mmap_aghq,
       engine_keys = c("aghq_k", "optimizer"),
+      strict_engine_keys = TRUE,
+      capture_all_named_dots = FALSE,
+      blocked_keys = character(0),
       defaults = list(aghq_k = 2L)
     ),
     TMB = list(
       fit_fun = disag_model_mmap_tmb,
       engine_keys = c("iterations", "hess_control_parscale", "hess_control_ndeps"),
+      strict_engine_keys = TRUE,
+      capture_all_named_dots = FALSE,
+      blocked_keys = character(0),
+      defaults = list()
+    ),
+    MCMC = list(
+      fit_fun = disag_model_mmap_mcmc,
+      engine_keys = c(
+        "chains", "iter", "warmup", "thin", "cores", "seed",
+        "laplace", "debug", "silent", "lower", "upper"
+      ),
+      strict_engine_keys = FALSE,
+      capture_all_named_dots = TRUE,
+      blocked_keys = c(
+        "data", "priors", "family", "link", "engine", "time_varying_betas",
+        "engine.args", "aghq_k", "field", "iid", "starting_values",
+        "optimizer", "verbose", "..."
+      ),
       defaults = list()
     )
   )
@@ -189,9 +236,36 @@ resolve_engine_args_mmap <- function(engine,
                                      legacy_named_args,
                                      dot_engine_args) {
   allowed <- engine_spec$engine_keys
+  strict_engine_keys <- isTRUE(engine_spec$strict_engine_keys)
+  blocked_keys <- engine_spec$blocked_keys
+
+  drop_blocked_keys <- function(args, source_label) {
+    if (!length(args) || !length(blocked_keys)) {
+      return(args)
+    }
+    blocked <- intersect(names(args), blocked_keys)
+    if (length(blocked)) {
+      warning(
+        paste0(
+          "Ignoring reserved argument name(s) from ",
+          source_label,
+          ": ",
+          paste(blocked, collapse = ", "),
+          ". These are controlled by top-level `disag_model_mmap()` arguments."
+        ),
+        call. = FALSE
+      )
+      keep <- !(names(args) %in% blocked)
+      args <- args[keep]
+    }
+    args
+  }
+
+  engine_args <- drop_blocked_keys(engine_args, "`engine.args`")
+  dot_engine_args <- drop_blocked_keys(dot_engine_args, "`...`")
 
   unknown_engine_args <- setdiff(names(engine_args), allowed)
-  if (length(unknown_engine_args)) {
+  if (strict_engine_keys && length(unknown_engine_args)) {
     warning(
       paste0(
         "Ignoring unknown `engine.args` key(s) for engine ",
@@ -208,6 +282,19 @@ resolve_engine_args_mmap <- function(engine,
     engine_args <- engine_args[keep_idx]
   }
 
+  is_allowed_key <- function(nm) {
+    if (!nzchar(nm)) {
+      return(FALSE)
+    }
+    if (length(blocked_keys) && nm %in% blocked_keys) {
+      return(FALSE)
+    }
+    if (strict_engine_keys) {
+      return(nm %in% allowed)
+    }
+    TRUE
+  }
+
   resolved <- engine_spec$defaults
   source_map <- if (length(resolved)) {
     stats::setNames(rep("default", length(resolved)), names(resolved))
@@ -219,7 +306,7 @@ resolve_engine_args_mmap <- function(engine,
     if (!length(src_list)) return(invisible(NULL))
     for (ii in seq_along(src_list)) {
       nm <- names(src_list)[ii]
-      if (!nzchar(nm) || !(nm %in% allowed)) next
+      if (!is_allowed_key(nm)) next
 
       if (nm %in% names(source_map) && source_map[[nm]] != "default" && source_map[[nm]] != source_label) {
         warning(
@@ -282,6 +369,63 @@ validate_engine_specific_values <- function(engine, resolved_engine_args) {
       nd <- resolved_engine_args$hess_control_ndeps
       if (!is.numeric(nd) || length(nd) != 1L || !is.finite(nd) || nd <= 0) {
         stop("`hess_control_ndeps` must be a numeric scalar > 0.", call. = FALSE)
+      }
+    }
+  }
+
+  if (engine == "MCMC") {
+    validate_integer_scalar <- function(x, nm, min_value = 1L) {
+      if (!is_scalar_integerish(x) || x < min_value) {
+        stop(
+          "`",
+          nm,
+          "` must be an integer-like scalar >= ",
+          min_value,
+          ".",
+          call. = FALSE
+        )
+      }
+      as.integer(round(x))
+    }
+
+    integer_keys <- c("chains", "iter", "thin", "cores")
+    for (nm in integer_keys) {
+      if (nm %in% names(resolved_engine_args)) {
+        resolved_engine_args[[nm]] <- validate_integer_scalar(resolved_engine_args[[nm]], nm, min_value = 1L)
+      }
+    }
+
+    if ("warmup" %in% names(resolved_engine_args)) {
+      resolved_engine_args$warmup <- validate_integer_scalar(resolved_engine_args$warmup, "warmup", min_value = 0L)
+    }
+
+    if (all(c("warmup", "iter") %in% names(resolved_engine_args))) {
+      if (resolved_engine_args$warmup >= resolved_engine_args$iter) {
+        stop("`warmup` must be strictly less than `iter`.", call. = FALSE)
+      }
+    }
+
+    if ("seed" %in% names(resolved_engine_args)) {
+      resolved_engine_args$seed <- validate_integer_scalar(resolved_engine_args$seed, "seed", min_value = 1L)
+    }
+
+    logical_keys <- c("laplace", "debug", "silent")
+    for (nm in logical_keys) {
+      if (nm %in% names(resolved_engine_args)) {
+        val <- resolved_engine_args[[nm]]
+        if (!is.logical(val) || length(val) != 1L || is.na(val)) {
+          stop("`", nm, "` must be a non-missing logical scalar.", call. = FALSE)
+        }
+      }
+    }
+
+    numeric_vector_keys <- c("lower", "upper")
+    for (nm in numeric_vector_keys) {
+      if (nm %in% names(resolved_engine_args)) {
+        val <- resolved_engine_args[[nm]]
+        if (!is.numeric(val)) {
+          stop("`", nm, "` must be numeric.", call. = FALSE)
+        }
       }
     }
   }
