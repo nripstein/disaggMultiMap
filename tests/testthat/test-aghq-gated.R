@@ -23,6 +23,10 @@ test_that("disag_model_mmap AGHQ returns expected fit contract (gated)", {
   expect_true(is.character(fit$model_setup$theta_order))
   expect_true(length(fit$model_setup$theta_order) > 0L)
   expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_true(fit$model_setup$beta_index_map$space %in% c("theta", "random_effects"))
+  if (identical(fit$model_setup$beta_index_map$space, "random_effects")) {
+    expect_true(is.list(fit$model_setup$random_effect_layout))
+  }
 })
 
 test_that("predict.disag_model_mmap_aghq returns expected structure (gated)", {
@@ -82,7 +86,7 @@ test_that("predict.disag_model_mmap_aghq validates new_data covariate names (gat
   )
 })
 
-test_that("summary.disag_model_mmap_aghq normalizes time-varying slope names (gated)", {
+test_that("summary.disag_model_mmap_aghq reports outer-theta parameters after G12 (gated)", {
   skip_if_aghq_opted_out()
   bundle <- suppressWarnings(get_cached_aghq_fit("aghq_small_onecov_shared", time_varying_betas = TRUE))
   fit <- bundle$fit
@@ -90,7 +94,8 @@ test_that("summary.disag_model_mmap_aghq normalizes time-varying slope names (ga
   s <- suppressWarnings(summary(fit))
   rn <- rownames(s$aghq_summary$summarytable)
 
-  expect_true(all(c("intercept_t1", "intercept_t2", "temp_t1", "temp_t2") %in% rn))
+  expect_true(all(c("iideffect_log_tau", "log_sigma", "log_rho") %in% rn))
+  expect_false(any(grepl("^intercept_t", rn)))
   expect_false(any(grepl("^slope_t", rn)))
 })
 
@@ -107,6 +112,7 @@ test_that("AGHQ with nlminb optimizer returns expected fit contract (gated)", {
   expect_true(is.character(fit$model_setup$theta_order))
   expect_true(length(fit$model_setup$theta_order) > 0L)
   expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_true(fit$model_setup$beta_index_map$space %in% c("theta", "random_effects"))
 })
 
 test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
@@ -135,11 +141,15 @@ test_that("AGHQ shared-betas fit with two covariates maps slope names and order 
   expect_s3_class(fit, "disag_model_mmap_aghq")
   expect_false(isTRUE(fit$model_setup$time_varying_betas))
 
-  theta_order <- fit$model_setup$theta_order
   beta_map <- fit$model_setup$beta_index_map
   cov_names <- fit$model_setup$coef_meta$cov_names
 
   expect_equal(length(cov_names), 2L)
   expect_false(any(is.na(beta_map$slope_idx)))
-  expect_equal(theta_order[beta_map$slope_idx], cov_names)
+  if (identical(beta_map$space, "theta")) {
+    theta_order <- fit$model_setup$theta_order
+    expect_equal(theta_order[beta_map$slope_idx], cov_names)
+  } else {
+    expect_equal(length(beta_map$slope_idx), length(cov_names))
+  }
 })

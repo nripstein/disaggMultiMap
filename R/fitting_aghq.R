@@ -47,6 +47,7 @@ disag_model_mmap_aghq <- function(data,
     family          = family,
     link            = link,
     time_varying_betas = time_varying_betas,
+    beta_random_effects = TRUE,
     field           = field,
     iid             = iid,
     silent          = silent,
@@ -126,45 +127,30 @@ disag_model_mmap_aghq <- function(data,
   theta_order <- try(names(aghq_model$optresults$mode), silent = TRUE)
   if (inherits(theta_order, "try-error")) theta_order <- NULL
 
+  random_effect_layout <- NULL
   beta_index_map <- NULL
-  if (!is.null(theta_order)) {
-    Tn <- length(data$time_points)
-    p  <- coef_meta$p
-    if (isTRUE(time_varying_betas)) {
-      # time-varying: intercept_t1..T, and cov_names with _t1..T
-      intercept_idx <- vapply(seq_len(Tn), function(t)
-        match(paste0("intercept_t", t), theta_order), integer(1))
-      if (p > 0L) {
-        slope_idx <- sapply(seq_len(Tn), function(t)
-          match(paste0(coef_meta$cov_names, "_t", t), theta_order), simplify = "matrix")
-        if (is.null(dim(slope_idx))) slope_idx <- matrix(slope_idx, nrow = p)
-      } else {
-        slope_idx <- matrix(integer(0), nrow = 0, ncol = Tn)
-      }
-      if (any(is.na(intercept_idx)) || (p > 0L && any(is.na(slope_idx)))) {
-        stop("Internal: could not map time-varying betas to theta order in AGHQ fit.")
-      }
-      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
-                             tv = TRUE, p = p, Tn = Tn)
-    } else {
-      # shared betas: 'intercept' and cov_names
-      intercept_idx <- match("intercept", theta_order)
-      if (is.na(intercept_idx)) stop("Internal: 'intercept' not found in theta order.")
-      slope_idx <- if (p > 0L) match(coef_meta$cov_names, theta_order) else integer(0)
-      if (p > 0L && any(is.na(slope_idx))) {
-        missing <- coef_meta$cov_names[is.na(slope_idx)]
-        slope_like <- theta_order[grepl("^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", theta_order)]
-        stop(
-          "Internal: some slope names not found in theta order.\n",
-          "Missing expected slopes: ", paste(missing, collapse = ", "), "\n",
-          "Expected slope order: ", paste(coef_meta$cov_names, collapse = ", "), "\n",
-          "Observed slope-like theta names: ",
-          if (length(slope_like)) paste(slope_like, collapse = ", ") else "<none>"
-        )
-      }
-      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
-                             tv = FALSE, p = p, Tn = Tn)
-    }
+  random_info <- tryCatch(
+    build_random_effect_layout_mmap(
+      obj = obj,
+      aghq_model = aghq_model,
+      data = data,
+      coef_meta = coef_meta,
+      time_varying_betas = time_varying_betas
+    ),
+    error = function(e) NULL
+  )
+  if (!is.null(random_info)) {
+    random_effect_layout <- random_info$random_effect_layout
+    beta_index_map <- random_info$beta_index_map
+  }
+  # Backward-compatible fallback for older model shapes where betas are in theta.
+  if (is.null(beta_index_map) && !is.null(theta_order)) {
+    beta_index_map <- build_beta_index_map_from_theta(
+      theta_order = theta_order,
+      coef_meta = coef_meta,
+      time_varying_betas = time_varying_betas,
+      Tn = length(data$time_points)
+    )
   }
 
   out <- list(
@@ -180,7 +166,8 @@ disag_model_mmap_aghq <- function(data,
       time_varying_betas = time_varying_betas,
       coef_meta = coef_meta,
       theta_order = theta_order,
-      beta_index_map = beta_index_map
+      beta_index_map = beta_index_map,
+      random_effect_layout = random_effect_layout
     )
   )
   class(out) <- c("disag_model_mmap_aghq", "disag_model_mmap", "list")
@@ -192,4 +179,118 @@ disag_model_mmap_aghq <- function(data,
   }
 
   return(out)
+}
+
+build_beta_index_map_from_theta <- function(theta_order, coef_meta, time_varying_betas, Tn) {
+  p <- coef_meta$p
+  if (isTRUE(time_varying_betas)) {
+    intercept_idx <- vapply(seq_len(Tn), function(t)
+      match(paste0("intercept_t", t), theta_order), integer(1))
+    if (p > 0L) {
+      slope_idx <- sapply(seq_len(Tn), function(t)
+        match(paste0(coef_meta$cov_names, "_t", t), theta_order), simplify = "matrix")
+      if (is.null(dim(slope_idx))) slope_idx <- matrix(slope_idx, nrow = p)
+    } else {
+      slope_idx <- matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+    if (any(is.na(intercept_idx)) || (p > 0L && any(is.na(slope_idx)))) {
+      stop("Internal: could not map time-varying betas to theta order in AGHQ fit.")
+    }
+    return(list(
+      intercept_idx = intercept_idx,
+      slope_idx = slope_idx,
+      tv = TRUE,
+      p = p,
+      Tn = Tn,
+      space = "theta"
+    ))
+  }
+
+  intercept_idx <- match("intercept", theta_order)
+  if (is.na(intercept_idx)) stop("Internal: 'intercept' not found in theta order.")
+  slope_idx <- if (p > 0L) match(coef_meta$cov_names, theta_order) else integer(0)
+  if (p > 0L && any(is.na(slope_idx))) {
+    missing <- coef_meta$cov_names[is.na(slope_idx)]
+    slope_like <- theta_order[grepl("^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", theta_order)]
+    stop(
+      "Internal: some slope names not found in theta order.\n",
+      "Missing expected slopes: ", paste(missing, collapse = ", "), "\n",
+      "Expected slope order: ", paste(coef_meta$cov_names, collapse = ", "), "\n",
+      "Observed slope-like theta names: ",
+      if (length(slope_like)) paste(slope_like, collapse = ", ") else "<none>"
+    )
+  }
+  list(
+    intercept_idx = intercept_idx,
+    slope_idx = slope_idx,
+    tv = FALSE,
+    p = p,
+    Tn = Tn,
+    space = "theta"
+  )
+}
+
+build_random_effect_layout_mmap <- function(obj,
+                                            aghq_model,
+                                            data,
+                                            coef_meta,
+                                            time_varying_betas) {
+  theta_mode <- tryCatch(aghq_model$optresults$mode, error = function(e) NULL)
+  random_mode <- tryCatch(aghq_model$modesandhessians$mode[[1]], error = function(e) NULL)
+  if (is.null(theta_mode) || is.null(random_mode)) return(NULL)
+
+  random_names <- names(random_mode)
+  if (is.null(random_names)) return(NULL)
+  random_names <- as.character(random_names)
+  get_component_idx <- function(name) as.integer(which(random_names == name))
+
+  random_effect_layout <- list(
+    random_length = length(random_mode),
+    intercept_idx = get_component_idx("intercept"),
+    slope_idx = get_component_idx("slope"),
+    intercept_t_idx = get_component_idx("intercept_t"),
+    slope_t_idx = get_component_idx("slope_t"),
+    nodemean_idx = get_component_idx("nodemean"),
+    iideffect_idx = get_component_idx("iideffect")
+  )
+
+  Tn <- length(data$time_points)
+  p <- coef_meta$p
+  if (isTRUE(time_varying_betas)) {
+    intercept_idx <- random_effect_layout$intercept_t_idx
+    if (length(intercept_idx) != Tn) return(NULL)
+    if (p > 0L) {
+      slope_flat <- random_effect_layout$slope_t_idx
+      if (length(slope_flat) != p * Tn) return(NULL)
+      slope_idx <- matrix(slope_flat, nrow = p, ncol = Tn)
+    } else {
+      slope_idx <- matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+    beta_index_map <- list(
+      intercept_idx = intercept_idx,
+      slope_idx = slope_idx,
+      tv = TRUE,
+      p = p,
+      Tn = Tn,
+      space = "random_effects"
+    )
+  } else {
+    intercept_idx <- random_effect_layout$intercept_idx
+    if (length(intercept_idx) != 1L) return(NULL)
+    slope_idx <- if (p > 0L) random_effect_layout$slope_idx else integer(0)
+    if (p > 0L && length(slope_idx) != p) return(NULL)
+    beta_index_map <- list(
+      intercept_idx = intercept_idx,
+      slope_idx = slope_idx,
+      tv = FALSE,
+      p = p,
+      Tn = Tn,
+      space = "random_effects"
+    )
+  }
+
+  list(
+    random_effect_layout = random_effect_layout,
+    beta_index_map = beta_index_map
+  )
 }

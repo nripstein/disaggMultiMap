@@ -300,6 +300,8 @@ validate_engine_specific_values <- function(engine, resolved_engine_args) {
 #' @param family One of "gaussian", "binomial", "poisson", "negbinomial".
 #' @param link One of "identity", "logit", "log".
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
+#' @param beta_random_effects Logical; internal switch controlling whether beta
+#'   coefficients are treated as random effects in TMB's inner Laplace step.
 #' @param field Logical: include spatial field?
 #' @param iid Logical: include IID polygon effects?
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
@@ -313,6 +315,7 @@ make_model_object_mmap <- function(data,
                                    family = "gaussian",
                                    link = "identity",
                                    time_varying_betas = FALSE,
+                                   beta_random_effects = FALSE,
                                    field = TRUE,
                                    iid = TRUE,
                                    silent = TRUE,
@@ -585,6 +588,14 @@ make_model_object_mmap <- function(data,
 
   #-- 11. Identify random effects --
   random_effects <- character(0)
+  if (isTRUE(beta_random_effects)) {
+    # AGHQ path: integrate only covariance hyperparameters in the outer step.
+    if (time_varying_betas) {
+      random_effects <- c(random_effects, "intercept_t", "slope_t")
+    } else {
+      random_effects <- c(random_effects, "intercept", "slope")
+    }
+  }
   if (field) random_effects <- c(random_effects, "nodemean")
   if (iid && family_id != 3) { # include polygon-specific random‐effect vector when iid and not NB
     random_effects <- c(random_effects, "iideffect")

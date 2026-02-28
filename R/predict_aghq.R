@@ -121,6 +121,100 @@ get_predict_matrices <- function(data,
   )
 }
 
+# Internal helper: sample random effects from sparse Gaussian precision.
+draw_random_from_precision_mmap <- function(mode_vec, precision_mat, n_draws) {
+  n_dim <- length(mode_vec)
+  if (n_draws <= 0L) {
+    return(matrix(numeric(0), nrow = n_dim, ncol = 0))
+  }
+  if (is.null(precision_mat) || !all(dim(precision_mat) == c(n_dim, n_dim))) {
+    stop("Invalid random-effect precision matrix at AGHQ node.")
+  }
+
+  Q <- tryCatch(as(precision_mat, "CsparseMatrix"), error = function(e) NULL)
+  if (is.null(Q)) stop("Failed to coerce random-effect precision to sparse matrix.")
+
+  jitters <- c(0, 1e-8, 1e-6, 1e-4)
+  chol_Q <- NULL
+  for (jj in jitters) {
+    Q_try <- if (jj > 0) {
+      Q + Matrix::Diagonal(n_dim, x = rep(jj, n_dim))
+    } else {
+      Q
+    }
+    chol_Q <- tryCatch(
+      Matrix::Cholesky(Q_try, LDL = FALSE, perm = TRUE, super = TRUE),
+      error = function(e) NULL
+    )
+    if (!is.null(chol_Q)) break
+  }
+  if (is.null(chol_Q)) stop("Could not factor random-effect precision matrix.")
+
+  fac <- Matrix::expand(chol_Q)
+  L <- fac$L
+  Pt <- Matrix::t(fac$P)
+  Z <- matrix(stats::rnorm(n_dim * n_draws), nrow = n_dim, ncol = n_draws)
+  Y <- Matrix::solve(Matrix::t(L), Z, system = "A")
+  X <- Pt %*% Y
+  sweep(as.matrix(X), 1, mode_vec, `+`)
+}
+
+sample_node_random_draws_mmap <- function(object, N) {
+  nw <- tryCatch(object$aghq_model$normalized_posterior$nodesandweights, error = function(e) NULL)
+  mh <- tryCatch(object$aghq_model$modesandhessians, error = function(e) NULL)
+  if (is.null(nw) || is.null(mh) || !is.data.frame(nw)) {
+    stop("AGHQ node-wise random-effect sampling requires nodesandweights and modesandhessians.")
+  }
+  if (!all(c("weights", "logpost_normalized") %in% names(nw))) {
+    stop("AGHQ nodesandweights is missing required columns for sampling.")
+  }
+  n_nodes <- nrow(nw)
+  if (n_nodes < 1L) stop("AGHQ nodesandweights has no quadrature nodes.")
+  if (length(mh$mode) != n_nodes || length(mh$H) != n_nodes) {
+    stop("AGHQ modesandhessians does not align with quadrature nodes.")
+  }
+
+  logw <- log(pmax(as.numeric(nw$weights), .Machine$double.xmin)) + as.numeric(nw$logpost_normalized)
+  max_logw <- max(logw)
+  probs <- exp(logw - max_logw)
+  probs <- probs / sum(probs)
+
+  node_draw_idx <- sample.int(n_nodes, size = N, replace = TRUE, prob = probs)
+  node_levels <- sort(unique(node_draw_idx))
+  random_len <- length(mh$mode[[node_levels[[1]]]])
+  W_random <- matrix(0.0, nrow = random_len, ncol = N)
+
+  for (nd in node_levels) {
+    cols <- which(node_draw_idx == nd)
+    n_draws <- length(cols)
+    mode_nd <- as.numeric(mh$mode[[nd]])
+    H_nd <- mh$H[[nd]]
+    draws_nd <- tryCatch(
+      draw_random_from_precision_mmap(mode_nd, H_nd, n_draws),
+      error = function(e) {
+        warning(
+          "AGHQ random-effect draw fallback at node ", nd, ": ", conditionMessage(e),
+          call. = FALSE
+        )
+        matrix(rep(mode_nd, n_draws), nrow = length(mode_nd), ncol = n_draws)
+      }
+    )
+    W_random[, cols] <- draws_nd
+  }
+
+  W_random
+}
+
+predict_aghq_legacy_theta_draws_mmap <- function(object, N) {
+  samps <- aghq::sample_marginal(object$aghq_model, N)
+  W <- samps$samps
+  if (is.null(rownames(W))) stop("AGHQ draws lack row names; cannot align to model parameters.")
+  coef_meta <- tryCatch(object$model_setup$coef_meta, error = function(e) NULL)
+  tv_flag <- isTRUE(object$model_setup$time_varying_betas)
+  rownames(W) <- canonicalize_draw_names(rownames(W), coef_meta, tv_flag)
+  W
+}
+
 #' Predict mean & credible intervals for AGHQ-fitted disaggregation model
 #'
 #' @description
@@ -170,23 +264,12 @@ predict.disag_model_mmap_aghq <- function(object,
   Amatrix <- mats$A # projection matrix
   coords <- mats$coords # coords for raster building
 
-  #-- Draw from posterior marginal via AGHQ (theta only; no random effects) --
-  samps <- aghq::sample_marginal(object$aghq_model, N)
-  W <- samps$samps # matrix: (n_theta × N_draws)
-  # Canonicalize draw names to match training normalization
-  if (is.null(rownames(W))) stop("AGHQ draws lack row names; cannot align to model parameters.")
-  coef_meta <- tryCatch(object$model_setup$coef_meta, error = function(e) NULL)
-  tv_flag   <- isTRUE(object$model_setup$time_varying_betas)
-  rownames(W) <- canonicalize_draw_names(rownames(W), coef_meta, tv_flag)
   theta_order <- object$model_setup$theta_order
-  if (is.null(theta_order)) {
-    stop("AGHQ prediction requires parameter name order (theta_order). Please refit the model with a recent version.")
-  }
-
   beta_map <- object$model_setup$beta_index_map
   if (is.null(beta_map)) {
     stop("AGHQ prediction requires beta_index_map. Please refit the model with a recent version.")
   }
+  beta_space <- tryCatch(beta_map$space, error = function(e) NULL)
   tv   <- isTRUE(beta_map$tv)
   p    <- as.integer(beta_map$p)
   Tn   <- as.integer(beta_map$Tn)
@@ -209,41 +292,25 @@ predict.disag_model_mmap_aghq <- function(object,
                     stop("Unsupported link: ", object$model_setup$link)
   )
 
-  #-- Compute field at conditional mode (theta mode) if available --
-  field_vec <- NULL
-  if (isTRUE(object$model_setup$field)) {
-    # Try to extract nodemean at mode from AGHQ object first
-    mode_sources <- list(
-      tryCatch(object$aghq_model$optresults$mode, error = function(e) NULL),
-      tryCatch(object$aghq_model$modesandhessians$mode, error = function(e) NULL),
-      tryCatch(object$aghq_model$mode, error = function(e) NULL)
-    )
-    nodemean_from_mode <- NULL
-    for (mv in mode_sources) {
-      if (!is.null(mv)) {
-        nm <- names(mv)
-        if (!is.null(nm)) {
-          idx <- grepl("^nodemean", nm)
-          if (any(idx)) {
-            nodemean_from_mode <- as.numeric(mv[idx])
-            break
-          }
-        }
-      }
-    }
+  is_random_space <- identical(beta_space, "random_effects")
+  random_layout <- tryCatch(object$model_setup$random_effect_layout, error = function(e) NULL)
+  if (is_random_space && is.null(random_layout)) {
+    stop("AGHQ random-effect beta mapping requires random_effect_layout. Please refit.")
+  }
 
-    if (!is.null(nodemean_from_mode) && length(nodemean_from_mode) == ncol(Amatrix)) {
-      field_vec <- as.numeric((Amatrix %*% matrix(nodemean_from_mode, ncol = 1))[, 1])
-    } else if (!is.null(object$obj)) {
-      # Fallback to TMB objective's last parameters
-      raw_pars <- tryCatch(object$obj$env$last.par.best, error = function(e) NULL)
-      if (!is.null(raw_pars)) {
-        pl <- tryCatch(slice_params_tmb(raw_pars, object), error = function(e) NULL)
-        if (!is.null(pl) && length(pl$nodemean) == ncol(Amatrix)) {
-          field_vec <- as.numeric((Amatrix %*% matrix(pl$nodemean, ncol = 1))[, 1])
-        }
-      }
+  W_theta <- NULL
+  W_random <- NULL
+  if (is_random_space) {
+    W_random <- sample_node_random_draws_mmap(object, N)
+  } else {
+    warning(
+      "Using legacy AGHQ theta-draw prediction path. Refit with current code for G12-compliant random-effect sampling.",
+      call. = FALSE
+    )
+    if (is.null(theta_order)) {
+      stop("AGHQ prediction requires theta_order for legacy fits. Please refit the model.")
     }
+    W_theta <- predict_aghq_legacy_theta_draws_mmap(object, N)
   }
 
   #-- Loop over time points --
@@ -251,7 +318,7 @@ predict.disag_model_mmap_aghq <- function(object,
     # 1. Extract design matrix
     X <- X_list[[i]]
 
-    # 2. Subset posterior draws for betas (aligned to training order)
+    # 2. Subset posterior draws for betas
     if (!tv) {
       rows_t <- c(beta_map$intercept_idx, if (p > 0L) beta_map$slope_idx)
     } else {
@@ -263,40 +330,80 @@ predict.disag_model_mmap_aghq <- function(object,
         rows_t <- beta_map$intercept_idx[i]
       }
     }
-    # Map required theta names to rows of W (only for betas we need)
-    theta_req <- theta_order[rows_t]
-    W_rows <- match(theta_req, rownames(W))
-    if (anyNA(W_rows)) {
-      # Fallback: if draw rows follow theta_order positionally, use positions
-      idx_in_theta <- match(theta_req, theta_order)
-      if (!anyNA(idx_in_theta) && nrow(W) >= max(idx_in_theta)) {
-        W_rows <- idx_in_theta
+
+    if (is_random_space) {
+      W_beta <- W_random[rows_t, , drop = FALSE]
+    } else {
+      theta_req <- theta_order[rows_t]
+      W_rows <- match(theta_req, rownames(W_theta))
+      if (anyNA(W_rows)) {
+        idx_in_theta <- match(theta_req, theta_order)
+        if (!anyNA(idx_in_theta) && nrow(W_theta) >= max(idx_in_theta)) {
+          W_rows <- idx_in_theta
+        } else {
+          miss <- theta_req[is.na(W_rows)]
+          stop("AGHQ draws are missing required beta parameters: ", paste(miss, collapse = ", "))
+        }
+      }
+      W_beta <- W_theta[W_rows, , drop = FALSE]
+    }
+
+    # 3. Compute linear predictors (covariates + optional sampled/mode field)
+    lin_cov <- X %*% W_beta
+    field_lin <- NULL
+    if (isTRUE(object$model_setup$field)) {
+      if (is_random_space) {
+        nodemean_idx <- tryCatch(random_layout$nodemean_idx, error = function(e) integer(0))
+        if (length(nodemean_idx) == ncol(Amatrix)) {
+          field_lin <- Amatrix %*% W_random[nodemean_idx, , drop = FALSE]
+        }
       } else {
-        miss <- theta_req[is.na(W_rows)]
-        stop("AGHQ draws are missing required beta parameters: ", paste(miss, collapse = ", "))
+        mode_sources <- list(
+          tryCatch(object$aghq_model$optresults$mode, error = function(e) NULL),
+          tryCatch(object$aghq_model$modesandhessians$mode, error = function(e) NULL),
+          tryCatch(object$aghq_model$mode, error = function(e) NULL)
+        )
+        nodemean_from_mode <- NULL
+        for (mv in mode_sources) {
+          if (!is.null(mv)) {
+            nm <- names(mv)
+            if (!is.null(nm)) {
+              idx <- grepl("^nodemean", nm)
+              if (any(idx)) {
+                nodemean_from_mode <- as.numeric(mv[idx])
+                break
+              }
+            }
+          }
+        }
+        if (!is.null(nodemean_from_mode) && length(nodemean_from_mode) == ncol(Amatrix)) {
+          field_lin <- Amatrix %*% matrix(nodemean_from_mode, ncol = 1)
+        }
       }
     }
-    W_beta <- W[W_rows, , drop = FALSE] # ((1+p) × N)
 
-    # 3. Compute linear predictors (covariates + optional field at mode)
-    lin_cov <- X %*% W_beta # (n_cells × N)
-    if (!is.null(field_vec)) {
-      lin_cov <- sweep(lin_cov, 1, field_vec, `+`)
+    lin_total <- lin_cov
+    if (!is.null(field_lin)) {
+      if (ncol(field_lin) == 1L && ncol(lin_total) > 1L) {
+        lin_total <- sweep(lin_total, 1, as.numeric(field_lin[, 1]), `+`)
+      } else {
+        lin_total <- lin_total + field_lin
+      }
     }
 
     # 4. Apply link to get lambda draws
-    lam_mat <- link_fn(lin_cov)
+    lam_mat <- link_fn(lin_total)
 
     # 5. Summarize posterior mean
     mean_vals <- Matrix::rowMeans(lam_mat)
 
-    # 6. Build SpatRasters for mean & components (field from mode if available)
+    # 6. Build SpatRasters for mean & components
     mean_preds[[i]] <- terra::rast(cbind(coords, y = mean_vals), type = "xyz")
-    # covariate component on linear scale (mean across draws before link)
     cov_lin_mean <- Matrix::rowMeans(X %*% W_beta)
     mean_covs[[i]]  <- terra::rast(cbind(coords, y = cov_lin_mean), type = "xyz")
-    if (!is.null(field_vec)) {
-      mean_fields[[i]] <- terra::rast(cbind(coords, y = field_vec), type = "xyz")
+    if (!is.null(field_lin)) {
+      field_mean <- if (ncol(field_lin) == 1L) as.numeric(field_lin[, 1]) else Matrix::rowMeans(field_lin)
+      mean_fields[[i]] <- terra::rast(cbind(coords, y = field_mean), type = "xyz")
     } else {
       mean_fields[[i]] <- NULL
     }
@@ -346,10 +453,10 @@ predict.disag_model_mmap_aghq <- function(object,
   if (verbose) {
     elapsed <- difftime(Sys.time(), start_time, units = "mins")
     msg <- sprintf("predict.disag_model_mmap_aghq() runtime: %.2f mins", as.numeric(elapsed))
-    if (isTRUE(object$model_setup$field) && is.null(field_vec)) {
-      msg <- paste0(msg, "; note: field contribution omitted (no mode available)")
-    } else if (isTRUE(object$model_setup$field)) {
-      msg <- paste0(msg, "; field added at mode; uncertainty excludes field")
+    if (is_random_space && isTRUE(object$model_setup$field)) {
+      msg <- paste0(msg, "; uncertainty includes sampled beta and field random effects")
+    } else if (!is_random_space && isTRUE(object$model_setup$field)) {
+      msg <- paste0(msg, "; legacy path uses field at mode")
     }
     message(msg)
   }
