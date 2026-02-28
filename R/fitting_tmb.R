@@ -10,6 +10,7 @@
 #' @param family One of 'gaussian', 'binomial', 'poisson', or 'negbinomial'.
 #' @param link One of 'identity', 'logit', or 'log'.
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
+#' @param fixed_effect_betas Logical; currently ignored by TMB engine.
 #' @param iterations Integer >= 1: maximum number of optimizer iterations.
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
@@ -27,6 +28,7 @@ disag_model_mmap_tmb <- function(data,
                                  family = 'poisson',
                                  link = 'log',
                                  time_varying_betas = FALSE,
+                                 fixed_effect_betas = TRUE,
                                  iterations = 1000,
                                  field = TRUE,
                                  iid = TRUE,
@@ -42,12 +44,19 @@ disag_model_mmap_tmb <- function(data,
   }
   if(!is.null(priors)) stopifnot(inherits(priors, 'list'))
   stopifnot(is.numeric(iterations))
+  if (!isTRUE(fixed_effect_betas)) {
+    warning(
+      "`fixed_effect_betas = FALSE` is currently implemented for `engine = \"AGHQ\"` only and was ignored for TMB.",
+      call. = FALSE
+    )
+  }
 
   obj <- make_model_object_mmap(data = data,
                                 priors = priors,
                                 family = family,
                                 link = link,
                                 time_varying_betas = time_varying_betas,
+                                fixed_effect_betas = TRUE,
                                 field = field,
                                 iid = iid,
                                 silent = silent,
@@ -88,6 +97,7 @@ disag_model_mmap_tmb <- function(data,
                                           field = field,
                                           iid = iid,
                                           time_varying_betas = time_varying_betas,
+                                          fixed_effect_betas = TRUE,
                                           coef_meta = compute_coef_meta(data)))
 
   class(model_output) <- c("disag_model_mmap_tmb", "disag_model_mmap", "list")

@@ -121,6 +121,35 @@ get_predict_matrices <- function(data,
   )
 }
 
+#' Extract AGHQ draw blocks for theta and random effects
+#'
+#' @keywords internal
+aghq_extract_draw_blocks <- function(samps, coef_meta, time_varying_betas) {
+  theta_draws <- NULL
+  random_draws <- NULL
+
+  if (!is.null(samps$theta)) {
+    theta_mat <- as.matrix(samps$theta)
+    if (length(dim(theta_mat)) == 2L && nrow(theta_mat) > 0L && ncol(theta_mat) > 0L) {
+      theta_draws <- t(theta_mat)
+      rn <- colnames(theta_mat)
+      if (!is.null(rn)) {
+        rownames(theta_draws) <- normalize_fixed_names(rn, coef_meta, time_varying_betas)
+      }
+    }
+  }
+
+  if (!is.null(samps$samps)) {
+    random_draws <- as.matrix(samps$samps)
+    rn <- rownames(random_draws)
+    if (!is.null(rn)) {
+      rownames(random_draws) <- canonicalize_draw_names(rn, coef_meta, time_varying_betas)
+    }
+  }
+
+  list(theta_draws = theta_draws, random_draws = random_draws)
+}
+
 #' Predict mean & credible intervals for AGHQ-fitted disaggregation model
 #'
 #' @description
@@ -170,23 +199,18 @@ predict.disag_model_mmap_aghq <- function(object,
   Amatrix <- mats$A # projection matrix
   coords <- mats$coords # coords for raster building
 
-  #-- Draw from posterior marginal via AGHQ (theta only; no random effects) --
+  #-- Draw from posterior via AGHQ --
   samps <- aghq::sample_marginal(object$aghq_model, N)
-  W <- samps$samps # matrix: (n_theta × N_draws)
-  # Canonicalize draw names to match training normalization
-  if (is.null(rownames(W))) stop("AGHQ draws lack row names; cannot align to model parameters.")
   coef_meta <- tryCatch(object$model_setup$coef_meta, error = function(e) NULL)
   tv_flag   <- isTRUE(object$model_setup$time_varying_betas)
-  rownames(W) <- canonicalize_draw_names(rownames(W), coef_meta, tv_flag)
-  theta_order <- object$model_setup$theta_order
-  if (is.null(theta_order)) {
-    stop("AGHQ prediction requires parameter name order (theta_order). Please refit the model with a recent version.")
-  }
+  draw_blocks <- aghq_extract_draw_blocks(samps, coef_meta, tv_flag)
 
   beta_map <- object$model_setup$beta_index_map
   if (is.null(beta_map)) {
     stop("AGHQ prediction requires beta_index_map. Please refit the model with a recent version.")
   }
+  beta_source <- tryCatch(beta_map$source, error = function(e) NULL)
+  if (is.null(beta_source) || !nzchar(beta_source)) beta_source <- "theta"
   tv   <- isTRUE(beta_map$tv)
   p    <- as.integer(beta_map$p)
   Tn   <- as.integer(beta_map$Tn)
@@ -263,20 +287,21 @@ predict.disag_model_mmap_aghq <- function(object,
         rows_t <- beta_map$intercept_idx[i]
       }
     }
-    # Map required theta names to rows of W (only for betas we need)
-    theta_req <- theta_order[rows_t]
-    W_rows <- match(theta_req, rownames(W))
-    if (anyNA(W_rows)) {
-      # Fallback: if draw rows follow theta_order positionally, use positions
-      idx_in_theta <- match(theta_req, theta_order)
-      if (!anyNA(idx_in_theta) && nrow(W) >= max(idx_in_theta)) {
-        W_rows <- idx_in_theta
-      } else {
-        miss <- theta_req[is.na(W_rows)]
-        stop("AGHQ draws are missing required beta parameters: ", paste(miss, collapse = ", "))
-      }
+    beta_draws <- if (identical(beta_source, "random")) {
+      draw_blocks$random_draws
+    } else {
+      draw_blocks$theta_draws
     }
-    W_beta <- W[W_rows, , drop = FALSE] # ((1+p) × N)
+    if (is.null(beta_draws)) {
+      stop("AGHQ prediction could not extract ", beta_source, " draws for beta parameters.")
+    }
+    if (max(rows_t) > nrow(beta_draws)) {
+      stop(
+        "AGHQ beta index mapping exceeds available ", beta_source,
+        " draw rows. Refit the model with a compatible version."
+      )
+    }
+    W_beta <- beta_draws[rows_t, , drop = FALSE] # ((1+p) × N)
 
     # 3. Compute linear predictors (covariates + optional field at mode)
     lin_cov <- X %*% W_beta # (n_cells × N)
@@ -346,6 +371,11 @@ predict.disag_model_mmap_aghq <- function(object,
   if (verbose) {
     elapsed <- difftime(Sys.time(), start_time, units = "mins")
     msg <- sprintf("predict.disag_model_mmap_aghq() runtime: %.2f mins", as.numeric(elapsed))
+    if (identical(beta_source, "random")) {
+      msg <- paste0(msg, "; beta uncertainty from inner random-effect draws")
+    } else {
+      msg <- paste0(msg, "; beta uncertainty from outer theta draws")
+    }
     if (isTRUE(object$model_setup$field) && is.null(field_vec)) {
       msg <- paste0(msg, "; note: field contribution omitted (no mode available)")
     } else if (isTRUE(object$model_setup$field)) {

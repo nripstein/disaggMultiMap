@@ -11,6 +11,7 @@ disag_model_mmap(
   link = "log",
   engine = c("AGHQ", "TMB"),
   time_varying_betas = FALSE,
+  fixed_effect_betas = TRUE,
   engine.args = NULL,
   aghq_k = 2,
   field = TRUE,
@@ -34,6 +35,11 @@ disag_model_mmap(
 \item{engine}{Character; either \code{"AGHQ"} or \code{"TMB"}.}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect.}
+
+\item{fixed_effect_betas}{Logical; if TRUE (default), beta coefficients are
+treated as fixed effects in the AGHQ outer parameter block (current behavior).
+If FALSE and \code{engine = "AGHQ"}, beta coefficients are moved to TMB random
+effects so they are integrated in the inner Laplace step.}
 
 \item{engine.args}{Optional named list of engine-specific options.
 Supported keys:

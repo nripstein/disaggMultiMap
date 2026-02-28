@@ -10,6 +10,7 @@ disag_model_mmap_aghq(
   family = "poisson",
   link = "log",
   time_varying_betas = FALSE,
+  fixed_effect_betas = TRUE,
   aghq_k = 1,
   field = TRUE,
   iid = TRUE,
@@ -29,6 +30,9 @@ disag_model_mmap_aghq(
 \item{link}{One of "identity", "logit", or "log".}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
+\item{fixed_effect_betas}{Logical; if TRUE (default), beta coefficients are
+in AGHQ outer parameters. If FALSE, active betas are treated as TMB random effects.}
 
 \item{aghq_k}{Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).}
 

@@ -10,6 +10,7 @@ disag_model_mmap_tmb(
   family = "poisson",
   link = "log",
   time_varying_betas = FALSE,
+  fixed_effect_betas = TRUE,
   iterations = 1000,
   field = TRUE,
   iid = TRUE,
@@ -30,6 +31,8 @@ disag_model_mmap_tmb(
 \item{link}{One of 'identity', 'logit', or 'log'.}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
+\item{fixed_effect_betas}{Logical; currently ignored by TMB engine.}
 
 \item{iterations}{Integer >= 1: maximum number of optimizer iterations.}
 

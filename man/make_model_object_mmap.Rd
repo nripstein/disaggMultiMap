@@ -10,6 +10,7 @@ make_model_object_mmap(
   family = "gaussian",
   link = "identity",
   time_varying_betas = FALSE,
+  fixed_effect_betas = TRUE,
   field = TRUE,
   iid = TRUE,
   silent = TRUE,
@@ -28,6 +29,9 @@ make_model_object_mmap(
 \item{link}{One of "identity", "logit", "log".}
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
+
+\item{fixed_effect_betas}{Logical; if FALSE, active beta coefficients are
+included in TMB random effects (for AGHQ inner-Laplace treatment).}
 
 \item{field}{Logical: include spatial field?}
 

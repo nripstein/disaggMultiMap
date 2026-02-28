@@ -10,6 +10,10 @@
 #' @param link One of \code{"identity"}, \code{"logit"}, or \code{"log"}.
 #' @param engine Character; either \code{"AGHQ"} or \code{"TMB"}.
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect.
+#' @param fixed_effect_betas Logical; if TRUE (default), beta coefficients are
+#'   treated as fixed effects in the AGHQ outer parameter block (current behavior).
+#'   If FALSE and \code{engine = "AGHQ"}, beta coefficients are moved to TMB random
+#'   effects so they are integrated in the inner Laplace step.
 #' @param engine.args Optional named list of engine-specific options.
 #'   Supported keys:
 #'   \itemize{
@@ -37,6 +41,7 @@ disag_model_mmap <- function(data,
                              link   = "log",
                              engine = c("AGHQ","TMB"),
                              time_varying_betas = FALSE,
+                             fixed_effect_betas = TRUE,
                              engine.args = NULL,
                              aghq_k = 2, # Deprecated wrapper argument; prefer engine.args$aghq_k
                              field           = TRUE,
@@ -127,6 +132,7 @@ disag_model_mmap <- function(data,
     family             = family,
     link               = link,
     time_varying_betas = time_varying_betas,
+    fixed_effect_betas = fixed_effect_betas,
     field              = field,
     iid                = iid,
     silent             = silent,
@@ -300,6 +306,8 @@ validate_engine_specific_values <- function(engine, resolved_engine_args) {
 #' @param family One of "gaussian", "binomial", "poisson", "negbinomial".
 #' @param link One of "identity", "logit", "log".
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
+#' @param fixed_effect_betas Logical; if FALSE, active beta coefficients are
+#'   included in TMB random effects (for AGHQ inner-Laplace treatment).
 #' @param field Logical: include spatial field?
 #' @param iid Logical: include IID polygon effects?
 #' @param silent Logical: pass to 'MakeADFun()' to suppress output.
@@ -313,6 +321,7 @@ make_model_object_mmap <- function(data,
                                    family = "gaussian",
                                    link = "identity",
                                    time_varying_betas = FALSE,
+                                   fixed_effect_betas = TRUE,
                                    field = TRUE,
                                    iid = TRUE,
                                    silent = TRUE,
@@ -588,6 +597,13 @@ make_model_object_mmap <- function(data,
   if (field) random_effects <- c(random_effects, "nodemean")
   if (iid && family_id != 3) { # include polygon-specific random‐effect vector when iid and not NB
     random_effects <- c(random_effects, "iideffect")
+  }
+  if (!isTRUE(fixed_effect_betas)) {
+    if (time_varying_betas) {
+      random_effects <- c(random_effects, "intercept_t", "slope_t")
+    } else {
+      random_effects <- c(random_effects, "intercept", "slope")
+    }
   }
 
   #-- 12. Make objective function in TMB--

@@ -51,3 +51,25 @@ test_that("normalize_fixed_names keeps time-varying slope naming stable", {
 
   expect_equal(out, c("intercept_t1", "intercept_t2", "temp_t1", "precip_t1", "temp_t2", "precip_t2"))
 })
+
+test_that("aghq_extract_draw_blocks returns theta and random matrices with expected orientation", {
+  samps <- list(
+    theta = data.frame(intercept = c(0.1, 0.2), slope = c(1.1, 1.2)),
+    samps = matrix(
+      c(5, 6, 7, 8),
+      nrow = 2,
+      ncol = 2,
+      dimnames = list(c("intercept", "slope"), NULL)
+    )
+  )
+  coef_meta <- list(p = 1L, n_times = 1L, cov_names = "temp")
+
+  out <- aghq_extract_draw_blocks(samps, coef_meta, time_varying_betas = FALSE)
+
+  expect_true(is.matrix(out$theta_draws))
+  expect_equal(dim(out$theta_draws), c(2, 2))
+  expect_equal(rownames(out$theta_draws), c("intercept", "temp"))
+  expect_true(is.matrix(out$random_draws))
+  expect_equal(dim(out$random_draws), c(2, 2))
+  expect_equal(rownames(out$random_draws), c("intercept", "temp"))
+})

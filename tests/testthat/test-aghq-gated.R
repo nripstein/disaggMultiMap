@@ -19,10 +19,14 @@ test_that("disag_model_mmap AGHQ returns expected fit contract (gated)", {
   expect_true(isTRUE(fit$model_setup$field))
   expect_true(isTRUE(fit$model_setup$iid))
   expect_false(isTRUE(fit$model_setup$time_varying_betas))
+  expect_true(isTRUE(fit$model_setup$fixed_effect_betas))
 
   expect_true(is.character(fit$model_setup$theta_order))
   expect_true(length(fit$model_setup$theta_order) > 0L)
+  expect_true(is.character(fit$model_setup$random_order))
+  expect_true(length(fit$model_setup$random_order) > 0L)
   expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_equal(fit$model_setup$beta_index_map$source, "theta")
 })
 
 test_that("predict.disag_model_mmap_aghq returns expected structure (gated)", {
@@ -106,7 +110,10 @@ test_that("AGHQ with nlminb optimizer returns expected fit contract (gated)", {
   expect_true(all(c("aghq_model", "obj", "data", "sd_out", "model_setup") %in% names(fit)))
   expect_true(is.character(fit$model_setup$theta_order))
   expect_true(length(fit$model_setup$theta_order) > 0L)
+  expect_true(is.character(fit$model_setup$random_order))
+  expect_true(length(fit$model_setup$random_order) > 0L)
   expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_equal(fit$model_setup$beta_index_map$source, "theta")
 })
 
 test_that("AGHQ shared-betas fit with two covariates maps slope names and order (gated regression)", {
@@ -128,6 +135,7 @@ test_that("AGHQ shared-betas fit with two covariates maps slope names and order 
       field = TRUE,
       iid = TRUE,
       time_varying_betas = FALSE,
+      fixed_effect_betas = TRUE,
       silent = TRUE
     )
   )
@@ -142,4 +150,30 @@ test_that("AGHQ shared-betas fit with two covariates maps slope names and order 
   expect_equal(length(cov_names), 2L)
   expect_false(any(is.na(beta_map$slope_idx)))
   expect_equal(theta_order[beta_map$slope_idx], cov_names)
+})
+
+test_that("AGHQ random-betas mode maps betas to random-effect order and prediction works (gated)", {
+  skip_if_aghq_opted_out()
+  bundle <- suppressWarnings(get_cached_aghq_fit(
+    "aghq_small_onecov_shared",
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+  n_times <- length(fit$data$time_points)
+
+  expect_false(isTRUE(fit$model_setup$fixed_effect_betas))
+  expect_equal(fit$model_setup$beta_index_map$source, "random")
+  expect_true(is.character(fit$model_setup$random_order))
+  expect_true(length(fit$model_setup$random_order) > 0L)
+  expect_true(length(fit$obj$par) < length(fit$model_setup$random_order))
+
+  pred <- suppressWarnings(predict(fit, predict_iid = FALSE, N = 8, CI = 0.9))
+  expect_s3_class(pred, "disag_prediction_mmap_aghq")
+  expect_true(is.list(pred$mean_prediction$prediction))
+  expect_equal(length(pred$mean_prediction$prediction), n_times)
+  expect_true(inherits(pred$mean_prediction$prediction[[1]], "SpatRaster"))
+
+  s <- suppressWarnings(summary(fit))
+  expect_true(is.data.frame(s$beta_summary))
+  expect_true(all(c("intercept", "temp") %in% rownames(s$beta_summary)))
 })

@@ -9,6 +9,8 @@
 #' @param family One of "gaussian", "binomial", "poisson", or "negbinomial".
 #' @param link One of "identity", "logit", or "log".
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
+#' @param fixed_effect_betas Logical; if TRUE (default), beta coefficients are
+#'   in AGHQ outer parameters. If FALSE, active betas are treated as TMB random effects.
 #' @param aghq_k Integer >= 1: number of quadrature nodes for AGHQ ('1' = Laplace).
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
@@ -23,6 +25,7 @@ disag_model_mmap_aghq <- function(data,
                                   family = "poisson",
                                   link = "log",
                                   time_varying_betas = FALSE,
+                                  fixed_effect_betas = TRUE,
                                   aghq_k = 1,
                                   field = TRUE,
                                   iid = TRUE,
@@ -47,6 +50,7 @@ disag_model_mmap_aghq <- function(data,
     family          = family,
     link            = link,
     time_varying_betas = time_varying_betas,
+    fixed_effect_betas = fixed_effect_betas,
     field           = field,
     iid             = iid,
     silent          = silent,
@@ -122,48 +126,59 @@ disag_model_mmap_aghq <- function(data,
   try({ sd_out <- TMB::sdreport(obj) }, silent = TRUE)
 
   #-- 6. Assemble output --
-  # Build fixed-parameter order and beta index map for robust prediction
+  # Build fixed/random parameter order and beta index map for robust prediction
   theta_order <- try(names(aghq_model$optresults$mode), silent = TRUE)
   if (inherits(theta_order, "try-error")) theta_order <- NULL
+  random_order <- try(names(obj$env$par)[obj$env$random], silent = TRUE)
+  if (inherits(random_order, "try-error")) random_order <- NULL
 
   beta_index_map <- NULL
-  if (!is.null(theta_order)) {
-    Tn <- length(data$time_points)
-    p  <- coef_meta$p
-    if (isTRUE(time_varying_betas)) {
-      # time-varying: intercept_t1..T, and cov_names with _t1..T
-      intercept_idx <- vapply(seq_len(Tn), function(t)
-        match(paste0("intercept_t", t), theta_order), integer(1))
-      if (p > 0L) {
-        slope_idx <- sapply(seq_len(Tn), function(t)
-          match(paste0(coef_meta$cov_names, "_t", t), theta_order), simplify = "matrix")
-        if (is.null(dim(slope_idx))) slope_idx <- matrix(slope_idx, nrow = p)
+  Tn <- length(data$time_points)
+  p  <- coef_meta$p
+  beta_source <- if (isTRUE(fixed_effect_betas)) "theta" else "random"
+  beta_names <- if (isTRUE(time_varying_betas)) {
+    c(
+      paste0("intercept_t", seq_len(Tn)),
+      as.vector(vapply(seq_len(Tn), function(t) paste0(coef_meta$cov_names, "_t", t), character(p)))
+    )
+  } else {
+    c("intercept", coef_meta$cov_names)
+  }
+  source_order <- if (identical(beta_source, "theta")) theta_order else random_order
+  if (!is.null(source_order)) {
+    source_order_norm <- normalize_fixed_names(source_order, coef_meta, time_varying_betas)
+    idx_all <- match(beta_names, source_order_norm)
+    if (!anyNA(idx_all)) {
+      if (isTRUE(time_varying_betas)) {
+        intercept_idx <- idx_all[seq_len(Tn)]
+        slope_idx <- if (p > 0L) {
+          matrix(
+            idx_all[-seq_len(Tn)],
+            nrow = p,
+            ncol = Tn,
+            byrow = FALSE
+          )
+        } else {
+          matrix(integer(0), nrow = 0, ncol = Tn)
+        }
       } else {
-        slope_idx <- matrix(integer(0), nrow = 0, ncol = Tn)
+        intercept_idx <- idx_all[1L]
+        slope_idx <- if (p > 0L) idx_all[-1L] else integer(0)
       }
-      if (any(is.na(intercept_idx)) || (p > 0L && any(is.na(slope_idx)))) {
-        stop("Internal: could not map time-varying betas to theta order in AGHQ fit.")
-      }
-      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
-                             tv = TRUE, p = p, Tn = Tn)
+      beta_index_map <- list(
+        source = beta_source,
+        intercept_idx = intercept_idx,
+        slope_idx = slope_idx,
+        tv = isTRUE(time_varying_betas),
+        p = p,
+        Tn = Tn
+      )
     } else {
-      # shared betas: 'intercept' and cov_names
-      intercept_idx <- match("intercept", theta_order)
-      if (is.na(intercept_idx)) stop("Internal: 'intercept' not found in theta order.")
-      slope_idx <- if (p > 0L) match(coef_meta$cov_names, theta_order) else integer(0)
-      if (p > 0L && any(is.na(slope_idx))) {
-        missing <- coef_meta$cov_names[is.na(slope_idx)]
-        slope_like <- theta_order[grepl("^slope(\\[[0-9]+\\]|\\.[0-9]+|[0-9]+)?$", theta_order)]
-        stop(
-          "Internal: some slope names not found in theta order.\n",
-          "Missing expected slopes: ", paste(missing, collapse = ", "), "\n",
-          "Expected slope order: ", paste(coef_meta$cov_names, collapse = ", "), "\n",
-          "Observed slope-like theta names: ",
-          if (length(slope_like)) paste(slope_like, collapse = ", ") else "<none>"
-        )
-      }
-      beta_index_map <- list(intercept_idx = intercept_idx, slope_idx = slope_idx,
-                             tv = FALSE, p = p, Tn = Tn)
+      miss <- beta_names[is.na(idx_all)]
+      stop(
+        "Internal: could not map beta names in ", beta_source, " order. Missing: ",
+        paste(miss, collapse = ", ")
+      )
     }
   }
 
@@ -178,8 +193,10 @@ disag_model_mmap_aghq <- function(data,
       field  = field,
       iid    = iid,
       time_varying_betas = time_varying_betas,
+      fixed_effect_betas = fixed_effect_betas,
       coef_meta = coef_meta,
       theta_order = theta_order,
+      random_order = random_order,
       beta_index_map = beta_index_map
     )
   )

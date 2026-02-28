@@ -349,8 +349,13 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
                                 field = TRUE,
                                 iid = TRUE,
                                 time_varying_betas = FALSE,
+                                fixed_effect_betas = TRUE,
                                 use_legacy_args = FALSE) {
-  key <- paste(name, aghq_k, family, optimizer, field, iid, time_varying_betas, use_legacy_args, sep = "|")
+  key <- paste(
+    name, aghq_k, family, optimizer, field, iid,
+    time_varying_betas, fixed_effect_betas, use_legacy_args,
+    sep = "|"
+  )
   if (exists(key, envir = .mmap_aghq_fit_cache, inherits = FALSE)) {
     return(get(key, envir = .mmap_aghq_fit_cache, inherits = FALSE))
   }
@@ -371,6 +376,7 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
       field = field,
       iid = iid,
       time_varying_betas = time_varying_betas,
+      fixed_effect_betas = fixed_effect_betas,
       silent = TRUE,
       optimizer = optimizer
     )
@@ -387,6 +393,7 @@ get_cached_aghq_fit <- function(name = "aghq_small_onecov_shared",
       field = field,
       iid = iid,
       time_varying_betas = time_varying_betas,
+      fixed_effect_betas = fixed_effect_betas,
       silent = TRUE
     )
   }

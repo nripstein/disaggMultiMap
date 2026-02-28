@@ -136,7 +136,8 @@ print.disag_model_mmap_aghq <- function(x, ..., max_print = 30) {
       family = x$model_setup$family,
       link = x$model_setup$link,
       field = x$model_setup$field,
-      iid = x$model_setup$iid
+      iid = x$model_setup$iid,
+      fixed_effect_betas = isTRUE(tryCatch(x$model_setup$fixed_effect_betas, error = function(e) TRUE))
     )
   }, error = function(e) {
     warning("Could not extract model setup information: ", e$message)
@@ -144,7 +145,8 @@ print.disag_model_mmap_aghq <- function(x, ..., max_print = 30) {
       family = "unknown",
       link = "unknown",
       field = NA,
-      iid = NA
+      iid = NA,
+      fixed_effect_betas = NA
     )
   })
 
@@ -165,6 +167,11 @@ print.disag_model_mmap_aghq <- function(x, ..., max_print = 30) {
     cat("IID effects included: Unknown\n")
   } else {
     cat(sprintf("IID effects included: %s\n", ifelse(model_info$iid, "Yes", "No")))
+  }
+  if (is.na(model_info$fixed_effect_betas)) {
+    cat("Betas as fixed effects: Unknown\n")
+  } else {
+    cat(sprintf("Betas as fixed effects: %s\n", ifelse(model_info$fixed_effect_betas, "Yes", "No")))
   }
 
   # Extract fixed effects information with robust error handling
@@ -283,7 +290,8 @@ summary.disag_model_mmap_aghq <- function(object, ...) {
     family = object$model_setup$family,
     link = object$model_setup$link,
     field = object$model_setup$field,
-    iid = object$model_setup$iid
+    iid = object$model_setup$iid,
+    fixed_effect_betas = isTRUE(tryCatch(object$model_setup$fixed_effect_betas, error = function(e) TRUE))
   )
 
   # Get AGHQ summary directly
@@ -314,11 +322,57 @@ summary.disag_model_mmap_aghq <- function(object, ...) {
     quad_points <- object$aghq_model$normalized_posterior$grid$level[[1]]
   }
 
+  beta_summary <- NULL
+  if (isFALSE(model_info$fixed_effect_betas) && !is.null(object$sd_out)) {
+    beta_map <- tryCatch(object$model_setup$beta_index_map, error = function(e) NULL)
+    coef_meta <- tryCatch(object$model_setup$coef_meta, error = function(e) NULL)
+    if (!is.null(beta_map) && identical(beta_map$source, "random") && !is.null(coef_meta)) {
+      p <- as.integer(beta_map$p)
+      Tn <- as.integer(beta_map$Tn)
+      tv <- isTRUE(beta_map$tv)
+      beta_idx <- if (!tv) {
+        c(beta_map$intercept_idx, if (p > 0L) beta_map$slope_idx else integer(0))
+      } else {
+        as.integer(c(
+          beta_map$intercept_idx,
+          if (p > 0L) as.vector(beta_map$slope_idx) else integer(0)
+        ))
+      }
+      beta_names <- if (!tv) {
+        c("intercept", coef_meta$cov_names)
+      } else {
+        c(
+          paste0("intercept_t", seq_len(Tn)),
+          as.vector(vapply(seq_len(Tn), function(t) paste0(coef_meta$cov_names, "_t", t), character(p)))
+        )
+      }
+      par_random <- tryCatch(as.numeric(object$sd_out$par.random), error = function(e) NULL)
+      diag_cov_random <- tryCatch(as.numeric(object$sd_out$diag.cov.random), error = function(e) NULL)
+      if (!is.null(par_random) && length(beta_idx) > 0L && max(beta_idx) <= length(par_random)) {
+        est <- par_random[beta_idx]
+        se <- if (!is.null(diag_cov_random) && max(beta_idx) <= length(diag_cov_random)) {
+          sqrt(diag_cov_random[beta_idx])
+        } else {
+          rep(NA_real_, length(beta_idx))
+        }
+        beta_summary <- data.frame(
+          estimate = est,
+          std.error = se,
+          lower95 = est - 1.96 * se,
+          upper95 = est + 1.96 * se,
+          row.names = beta_names,
+          check.names = FALSE
+        )
+      }
+    }
+  }
+
   # Create the summary object
   out <- list(
     model_info = model_info,
     aghq_summary = aghq_summary,
-    quad_points = quad_points
+    quad_points = quad_points,
+    beta_summary = beta_summary
   )
 
   # Set the class
@@ -352,6 +406,7 @@ print.summary.disag_model_mmap_aghq <- function(x, ...) {
   cat(sprintf("Link function: %s\n", x$model_info$link))
   cat(sprintf("Spatial field included: %s\n", ifelse(x$model_info$field, "Yes", "No")))
   cat(sprintf("IID effects included: %s\n", ifelse(x$model_info$iid, "Yes", "No")))
+  cat(sprintf("Betas as fixed effects: %s\n", ifelse(x$model_info$fixed_effect_betas, "Yes", "No")))
   cat(sprintf("Quadrature Points: %s\n", x$quad_points))
 
 
@@ -365,6 +420,12 @@ print.summary.disag_model_mmap_aghq <- function(x, ...) {
   } else {
     cat("\nNo AGHQ summary information available.\n")
     cat("Try using summary(object$aghq_model) directly for more information.\n")
+  }
+
+  if (!is.null(x$beta_summary)) {
+    cat("\nConditional Laplace Beta Summary (from sdreport random effects):\n")
+    cat("---------------------------------------------------------------\n")
+    print(x$beta_summary)
   }
 
   # Return invisibly
