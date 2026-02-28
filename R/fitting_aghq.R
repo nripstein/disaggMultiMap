@@ -137,10 +137,17 @@ disag_model_mmap_aghq <- function(data,
   p  <- coef_meta$p
   beta_source <- if (isTRUE(fixed_effect_betas)) "theta" else "random"
   beta_names <- if (isTRUE(time_varying_betas)) {
-    c(
-      paste0("intercept_t", seq_len(Tn)),
-      as.vector(vapply(seq_len(Tn), function(t) paste0(coef_meta$cov_names, "_t", t), character(p)))
-    )
+    intercept_names <- paste0("intercept_t", seq_len(Tn))
+    slope_names <- if (p > 0L) {
+      as.vector(vapply(
+        seq_len(Tn),
+        function(t) paste0(coef_meta$cov_names, "_t", t),
+        character(p)
+      ))
+    } else {
+      character(0)
+    }
+    c(intercept_names, slope_names)
   } else {
     c("intercept", coef_meta$cov_names)
   }

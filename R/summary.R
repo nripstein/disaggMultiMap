@@ -341,9 +341,14 @@ summary.disag_model_mmap_aghq <- function(object, ...) {
       beta_names <- if (!tv) {
         c("intercept", coef_meta$cov_names)
       } else {
+        slope_names <- if (p > 0L) {
+          as.vector(vapply(seq_len(Tn), function(t) paste0(coef_meta$cov_names, "_t", t), character(p)))
+        } else {
+          character(0)
+        }
         c(
           paste0("intercept_t", seq_len(Tn)),
-          as.vector(vapply(seq_len(Tn), function(t) paste0(coef_meta$cov_names, "_t", t), character(p)))
+          slope_names
         )
       }
       par_random <- tryCatch(as.numeric(object$sd_out$par.random), error = function(e) NULL)

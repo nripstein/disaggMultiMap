@@ -177,3 +177,40 @@ test_that("AGHQ random-betas mode maps betas to random-effect order and predicti
   expect_true(is.data.frame(s$beta_summary))
   expect_true(all(c("intercept", "temp") %in% rownames(s$beta_summary)))
 })
+
+test_that("AGHQ handles time-varying intercept-only models (no covariates) (gated regression)", {
+  skip_if_aghq_opted_out()
+  family <- get_test_family_mmap()
+  optimizer <- get_test_aghq_optimizer_mmap(family)
+
+  data_obj <- prepare_data_mmap(
+    polygon_shapefile_list = test_data_mmap$polygon_shapefile_list,
+    covariate_rasters_list = NULL,
+    aggregation_rasters_list = test_data_mmap$aggregation_rasters_list,
+    make_mesh = TRUE
+  )
+
+  fit <- suppressWarnings(
+    disag_model_mmap(
+      data = data_obj,
+      engine = "AGHQ",
+      family = family,
+      link = "log",
+      engine.args = list(
+        aghq_k = 1,
+        optimizer = optimizer
+      ),
+      field = TRUE,
+      iid = TRUE,
+      time_varying_betas = TRUE,
+      fixed_effect_betas = TRUE,
+      silent = TRUE
+    )
+  )
+
+  expect_s3_class(fit, "disag_model_mmap_aghq")
+  expect_true(isTRUE(fit$model_setup$time_varying_betas))
+  expect_equal(fit$model_setup$coef_meta$p, 0L)
+  expect_equal(length(fit$model_setup$beta_index_map$intercept_idx), length(data_obj$time_points))
+  expect_equal(length(fit$model_setup$beta_index_map$slope_idx), 0L)
+})
