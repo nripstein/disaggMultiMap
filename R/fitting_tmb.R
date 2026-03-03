@@ -10,7 +10,9 @@
 #' @param family One of 'gaussian', 'binomial', 'poisson', or 'negbinomial'.
 #' @param link One of 'identity', 'logit', or 'log'.
 #' @param time_varying_betas Logical; if TRUE, each time point has its own fixed-effect
-#' @param fixed_effect_betas Logical; currently ignored by TMB engine.
+#' @param fixed_effect_betas Logical; if TRUE (default), active beta coefficients are
+#'   treated as fixed effects. If FALSE, active beta coefficients are treated
+#'   as random effects in the inner Laplace step.
 #' @param iterations Integer >= 1: maximum number of optimizer iterations.
 #' @param field Logical: include the spatial random field?
 #' @param iid Logical: include polygon-specific IID effects?
@@ -44,32 +46,37 @@ disag_model_mmap_tmb <- function(data,
   }
   if(!is.null(priors)) stopifnot(inherits(priors, 'list'))
   stopifnot(is.numeric(iterations))
-  if (!isTRUE(fixed_effect_betas)) {
-    warning(
-      "`fixed_effect_betas = FALSE` is currently implemented for `engine = \"AGHQ\"` only and was ignored for TMB.",
-      call. = FALSE
-    )
-  }
 
   obj <- make_model_object_mmap(data = data,
                                 priors = priors,
                                 family = family,
                                 link = link,
                                 time_varying_betas = time_varying_betas,
-                                fixed_effect_betas = TRUE,
+                                fixed_effect_betas = fixed_effect_betas,
                                 field = field,
                                 iid = iid,
                                 silent = silent,
                                 starting_values = starting_values)
 
   message("Fitting ", family," disaggregation model via TMB.")
-  opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
-                       control = list(iter.max = iterations, trace = 0))
+  if (length(obj$par) > 0L) {
+    opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
+                         control = list(iter.max = iterations, trace = 0))
 
-  if(opt$convergence != 0) warning('The model did not converge. Try changing starting_values')
+    if(opt$convergence != 0) warning('The model did not converge. Try changing starting_values')
 
-  hess_control <- disagg_setup_hess_control(opt, hess_control_parscale, hess_control_ndeps)
-  hess <- stats::optimHess(opt$par, fn = obj$fn, gr = obj$gr, control = hess_control)
+    hess_control <- disagg_setup_hess_control(opt, hess_control_parscale, hess_control_ndeps)
+    hess <- stats::optimHess(opt$par, fn = obj$fn, gr = obj$gr, control = hess_control)
+  } else {
+    objective <- as.numeric(obj$fn(numeric(0)))
+    opt <- list(
+      par = numeric(0),
+      objective = objective,
+      convergence = 0L,
+      message = "No fixed parameters to optimize (all active parameters are random effects)."
+    )
+    hess <- matrix(numeric(0), nrow = 0L, ncol = 0L)
+  }
 
   sd_out <- TMB::sdreport(obj, getJointPrecision = TRUE, hessian.fixed = hess)
 
@@ -87,6 +94,15 @@ disag_model_mmap_tmb <- function(data,
   if (!is.null(opt$par)) {
     names(opt$par) <- normalize_fixed_names(names(opt$par), coef_meta, time_varying_betas)
   }
+  tmb_meta <- build_tmb_beta_metadata(list(
+    obj = obj,
+    sd_out = sd_out,
+    model_setup = list(
+      time_varying_betas = time_varying_betas,
+      fixed_effect_betas = fixed_effect_betas,
+      coef_meta = coef_meta
+    )
+  ))
 
   model_output <- list(obj = obj,
                        opt = opt,
@@ -97,8 +113,13 @@ disag_model_mmap_tmb <- function(data,
                                           field = field,
                                           iid = iid,
                                           time_varying_betas = time_varying_betas,
-                                          fixed_effect_betas = TRUE,
-                                          coef_meta = compute_coef_meta(data)))
+                                          fixed_effect_betas = fixed_effect_betas,
+                                          coef_meta = coef_meta,
+                                          theta_order = tmb_meta$theta_order,
+                                          fixed_order = tmb_meta$fixed_order,
+                                          random_order = tmb_meta$random_order,
+                                          full_order = tmb_meta$full_order,
+                                          beta_index_map = tmb_meta$beta_index_map))
 
   class(model_output) <- c("disag_model_mmap_tmb", "disag_model_mmap", "list")
 

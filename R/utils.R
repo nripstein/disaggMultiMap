@@ -583,15 +583,126 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
 }
 
 
+# Build TMB beta index metadata across fixed/random/full parameter orders.
+# @keywords internal
+build_tmb_beta_metadata <- function(model_output) {
+  ms <- model_output$model_setup
+  coef_meta <- tryCatch(ms$coef_meta, error = function(e) NULL)
+  if (is.null(coef_meta)) {
+    stop("Internal: model_setup$coef_meta is required for TMB beta metadata.")
+  }
+  tv <- isTRUE(ms$time_varying_betas)
+  p <- as.integer(coef_meta$p)
+  Tn <- as.integer(coef_meta$n_times)
+  cov_names <- coef_meta$cov_names
+
+  fixed_order_raw <- tryCatch(names(model_output$sd_out$par.fixed), error = function(e) NULL)
+  random_order_raw <- tryCatch(names(model_output$sd_out$par.random), error = function(e) NULL)
+  full_order_raw <- tryCatch(names(model_output$obj$env$par), error = function(e) NULL)
+
+  fixed_order <- if (is.null(fixed_order_raw)) {
+    character(0)
+  } else {
+    normalize_fixed_names(fixed_order_raw, coef_meta, tv)
+  }
+  random_order <- if (is.null(random_order_raw)) {
+    character(0)
+  } else {
+    canonicalize_draw_names(random_order_raw, coef_meta, tv)
+  }
+  full_order <- if (is.null(full_order_raw)) {
+    character(0)
+  } else {
+    canonicalize_draw_names(full_order_raw, coef_meta, tv)
+  }
+
+  beta_source <- if (isTRUE(ms$fixed_effect_betas)) "fixed" else "random"
+  beta_names <- if (tv) {
+    c(
+      paste0("intercept_t", seq_len(Tn)),
+      as.vector(vapply(seq_len(Tn), function(t) paste0(cov_names, "_t", t), character(p)))
+    )
+  } else {
+    c("intercept", cov_names)
+  }
+
+  source_order <- if (identical(beta_source, "fixed")) fixed_order else random_order
+  idx_source_all <- match(beta_names, source_order)
+  if (anyNA(idx_source_all)) {
+    miss <- beta_names[is.na(idx_source_all)]
+    stop(
+      "Internal: could not map beta names in ", beta_source, " order. Missing: ",
+      paste(miss, collapse = ", ")
+    )
+  }
+
+  idx_full_all <- match(beta_names, full_order)
+  if (anyNA(idx_full_all)) {
+    miss <- beta_names[is.na(idx_full_all)]
+    stop(
+      "Internal: could not map beta names in full parameter order. Missing: ",
+      paste(miss, collapse = ", ")
+    )
+  }
+
+  if (tv) {
+    intercept_idx <- idx_source_all[seq_len(Tn)]
+    full_intercept_idx <- idx_full_all[seq_len(Tn)]
+    slope_idx <- if (p > 0L) {
+      matrix(idx_source_all[-seq_len(Tn)], nrow = p, ncol = Tn, byrow = FALSE)
+    } else {
+      matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+    full_slope_idx <- if (p > 0L) {
+      matrix(idx_full_all[-seq_len(Tn)], nrow = p, ncol = Tn, byrow = FALSE)
+    } else {
+      matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+  } else {
+    intercept_idx <- idx_source_all[1L]
+    full_intercept_idx <- idx_full_all[1L]
+    slope_idx <- if (p > 0L) idx_source_all[-1L] else integer(0)
+    full_slope_idx <- if (p > 0L) idx_full_all[-1L] else integer(0)
+  }
+
+  list(
+    theta_order = fixed_order,
+    fixed_order = fixed_order,
+    random_order = random_order,
+    full_order = full_order,
+    beta_index_map = list(
+      source = beta_source,
+      intercept_idx = intercept_idx,
+      slope_idx = slope_idx,
+      full_intercept_idx = full_intercept_idx,
+      full_slope_idx = full_slope_idx,
+      tv = tv,
+      p = p,
+      Tn = Tn
+    )
+  )
+}
+
+
 # Slice a raw parameter vector into a minimal list the predictor needs, by index.
 # No names are used; only sizes/flags.
 slice_params_tmb <- function(par_vec, model_output) {
   # Pull meta
   ms   <- model_output$model_setup
   dat  <- model_output$data
-  p    <- if (!is.null(dat$covariate_rasters_list) && !is.null(dat$covariate_rasters_list[[1]]))
-    terra::nlyr(dat$covariate_rasters_list[[1]]) else 0L
-  Tn   <- length(dat$time_points)
+  coef_meta <- tryCatch(ms$coef_meta, error = function(e) NULL)
+  p    <- if (!is.null(coef_meta) && !is.null(coef_meta$p)) {
+    as.integer(coef_meta$p)
+  } else if (!is.null(dat$covariate_rasters_list) && !is.null(dat$covariate_rasters_list[[1]])) {
+    terra::nlyr(dat$covariate_rasters_list[[1]])
+  } else {
+    0L
+  }
+  Tn   <- if (!is.null(coef_meta) && !is.null(coef_meta$n_times)) {
+    as.integer(coef_meta$n_times)
+  } else {
+    length(dat$time_points)
+  }
   fam  <- ms$family
   fld  <- isTRUE(ms$field)
   iidf <- isTRUE(ms$iid)

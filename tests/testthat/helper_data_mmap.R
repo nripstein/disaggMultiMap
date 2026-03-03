@@ -247,8 +247,9 @@ get_cached_tmb_fit <- function(name = "default",
                                link = "log",
                                field = TRUE,
                                iid = FALSE,
-                               time_varying_betas = FALSE) {
-  key <- paste(name, seed, iterations, family, link, field, iid, time_varying_betas, sep = "|")
+                               time_varying_betas = FALSE,
+                               fixed_effect_betas = TRUE) {
+  key <- paste(name, seed, iterations, family, link, field, iid, time_varying_betas, fixed_effect_betas, sep = "|")
   if (exists(key, envir = .mmap_fit_cache, inherits = FALSE)) {
     return(get(key, envir = .mmap_fit_cache, inherits = FALSE))
   }
@@ -269,6 +270,7 @@ get_cached_tmb_fit <- function(name = "default",
     field = field,
     iid = iid,
     time_varying_betas = time_varying_betas,
+    fixed_effect_betas = fixed_effect_betas,
     silent = TRUE
   )
 

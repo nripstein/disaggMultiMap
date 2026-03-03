@@ -104,7 +104,7 @@ test_that("AGHQ-specific top-level args are warned and ignored under TMB", {
   expect_s3_class(out$value, "disag_model_mmap_tmb")
 })
 
-test_that("fixed_effect_betas FALSE is warned and ignored under TMB", {
+test_that("fixed_effect_betas FALSE is honored under TMB", {
   data_obj <- get_cached_prepared_data("prep_default_mesh")
   out <- capture_warnings_mmap(
     suppressMessages(
@@ -122,9 +122,10 @@ test_that("fixed_effect_betas FALSE is warned and ignored under TMB", {
     )
   )
 
-  expect_true(any(grepl("`fixed_effect_betas = FALSE` is currently implemented for `engine = \"AGHQ\"` only", out$warnings)))
+  expect_false(any(grepl("currently implemented for `engine = \"AGHQ\"` only", out$warnings)))
   expect_s3_class(out$value, "disag_model_mmap_tmb")
-  expect_true(isTRUE(out$value$model_setup$fixed_effect_betas))
+  expect_false(isTRUE(out$value$model_setup$fixed_effect_betas))
+  expect_equal(out$value$model_setup$beta_index_map$source, "random")
 })
 
 test_that("invalid engine.args container and names are rejected", {

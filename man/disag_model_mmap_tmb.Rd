@@ -32,7 +32,9 @@ disag_model_mmap_tmb(
 
 \item{time_varying_betas}{Logical; if TRUE, each time point has its own fixed-effect}
 
-\item{fixed_effect_betas}{Logical; currently ignored by TMB engine.}
+\item{fixed_effect_betas}{Logical; if TRUE (default), active beta coefficients are
+treated as fixed effects. If FALSE, active beta coefficients are treated
+as random effects in the inner Laplace step.}
 
 \item{iterations}{Integer >= 1: maximum number of optimizer iterations.}
 
