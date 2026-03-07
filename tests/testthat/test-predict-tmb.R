@@ -52,3 +52,77 @@ test_that("predict.disag_model_mmap_tmb handles no-field/no-iid model", {
   expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$lower), n_times)
   expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$upper), n_times)
 })
+
+test_that("predict.disag_model_mmap_tmb works with shared random-betas mode", {
+  bundle <- suppressWarnings(get_cached_tmb_fit(
+    name = "pred_shared_random_betas",
+    seed = 14L,
+    iterations = 20,
+    family = "poisson",
+    link = "log",
+    field = FALSE,
+    iid = FALSE,
+    time_varying_betas = FALSE,
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+  n_times <- length(fit$data$time_points)
+
+  pred <- suppressMessages(predict(fit, N = 2, predict_iid = FALSE))
+
+  expect_s3_class(pred, "disag_prediction_mmap")
+  expect_equal(terra::nlyr(pred$mean_prediction$prediction), n_times)
+  expect_equal(length(pred$uncertainty_prediction$realisations), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$lower), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$upper), n_times)
+})
+
+test_that("predict.disag_model_mmap_tmb works with field + shared random-betas mode", {
+  bundle <- suppressWarnings(get_cached_tmb_fit(
+    name = "pred_shared_random_betas_field",
+    seed = 17L,
+    iterations = 60,
+    family = "poisson",
+    link = "log",
+    field = TRUE,
+    iid = FALSE,
+    time_varying_betas = FALSE,
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+  n_times <- length(fit$data$time_points)
+
+  pred <- suppressMessages(predict(fit, N = 2, predict_iid = FALSE))
+
+  expect_s3_class(pred, "disag_prediction_mmap")
+  expect_equal(terra::nlyr(pred$mean_prediction$prediction), n_times)
+  expect_true(inherits(pred$mean_prediction$field, "SpatRaster"))
+  expect_equal(terra::nlyr(pred$mean_prediction$field), n_times)
+  expect_equal(length(pred$uncertainty_prediction$realisations), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$lower), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$upper), n_times)
+})
+
+test_that("predict.disag_model_mmap_tmb works with time-varying random-betas mode", {
+  bundle <- suppressWarnings(get_cached_tmb_fit(
+    name = "pred_tv_random_betas",
+    seed = 15L,
+    iterations = 20,
+    family = "poisson",
+    link = "log",
+    field = FALSE,
+    iid = FALSE,
+    time_varying_betas = TRUE,
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+  n_times <- length(fit$data$time_points)
+
+  pred <- suppressMessages(predict(fit, N = 2, predict_iid = FALSE))
+
+  expect_s3_class(pred, "disag_prediction_mmap")
+  expect_equal(terra::nlyr(pred$mean_prediction$prediction), n_times)
+  expect_equal(length(pred$uncertainty_prediction$realisations), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$lower), n_times)
+  expect_equal(terra::nlyr(pred$uncertainty_prediction$predictions_ci$upper), n_times)
+})

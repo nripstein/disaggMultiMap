@@ -32,7 +32,56 @@ test_that("disag_model_mmap_tmb returns expected object contract", {
   expect_true(isTRUE(fit$model_setup$field))
   expect_false(isTRUE(fit$model_setup$iid))
   expect_false(isTRUE(fit$model_setup$time_varying_betas))
+  expect_true(isTRUE(fit$model_setup$fixed_effect_betas))
+  expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_equal(fit$model_setup$beta_index_map$source, "fixed")
   expect_true(is.numeric(fit$opt$par))
+})
+
+test_that("disag_model_mmap_tmb supports shared random-betas mode", {
+  bundle <- suppressWarnings(get_cached_tmb_fit(
+    name = "fit_shared_random_betas",
+    seed = 12L,
+    iterations = 20,
+    family = "poisson",
+    link = "log",
+    field = FALSE,
+    iid = FALSE,
+    time_varying_betas = FALSE,
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+
+  expect_false(isTRUE(fit$model_setup$fixed_effect_betas))
+  expect_true(is.list(fit$model_setup$beta_index_map))
+  expect_equal(fit$model_setup$beta_index_map$source, "random")
+  expect_equal(length(fit$opt$par), 0L)
+  expect_true(length(fit$sd_out$par.random) > 0L)
+})
+
+test_that("disag_model_mmap_tmb supports time-varying random-betas mode", {
+  bundle <- suppressWarnings(get_cached_tmb_fit(
+    name = "fit_tv_random_betas",
+    seed = 13L,
+    iterations = 20,
+    family = "poisson",
+    link = "log",
+    field = FALSE,
+    iid = FALSE,
+    time_varying_betas = TRUE,
+    fixed_effect_betas = FALSE
+  ))
+  fit <- bundle$fit
+  beta_map <- fit$model_setup$beta_index_map
+  p <- fit$model_setup$coef_meta$p
+  Tn <- fit$model_setup$coef_meta$n_times
+
+  expect_false(isTRUE(fit$model_setup$fixed_effect_betas))
+  expect_equal(beta_map$source, "random")
+  expect_true(isTRUE(beta_map$tv))
+  expect_length(beta_map$intercept_idx, Tn)
+  expect_true(is.matrix(beta_map$slope_idx))
+  expect_equal(dim(beta_map$slope_idx), c(p, Tn))
 })
 
 test_that("disag_model_mmap_tmb keeps model flags for no-field/no-iid setup", {

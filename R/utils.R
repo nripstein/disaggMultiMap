@@ -583,15 +583,126 @@ canonicalize_draw_names <- function(old_names, coef_meta, time_varying_betas) {
 }
 
 
+# Build TMB beta index metadata across fixed/random/full parameter orders.
+# @keywords internal
+build_tmb_beta_metadata <- function(model_output) {
+  ms <- model_output$model_setup
+  coef_meta <- tryCatch(ms$coef_meta, error = function(e) NULL)
+  if (is.null(coef_meta)) {
+    stop("Internal: model_setup$coef_meta is required for TMB beta metadata.")
+  }
+  tv <- isTRUE(ms$time_varying_betas)
+  p <- as.integer(coef_meta$p)
+  Tn <- as.integer(coef_meta$n_times)
+  cov_names <- coef_meta$cov_names
+
+  fixed_order_raw <- tryCatch(names(model_output$sd_out$par.fixed), error = function(e) NULL)
+  random_order_raw <- tryCatch(names(model_output$sd_out$par.random), error = function(e) NULL)
+  full_order_raw <- tryCatch(names(model_output$obj$env$par), error = function(e) NULL)
+
+  fixed_order <- if (is.null(fixed_order_raw)) {
+    character(0)
+  } else {
+    normalize_fixed_names(fixed_order_raw, coef_meta, tv)
+  }
+  random_order <- if (is.null(random_order_raw)) {
+    character(0)
+  } else {
+    canonicalize_draw_names(random_order_raw, coef_meta, tv)
+  }
+  full_order <- if (is.null(full_order_raw)) {
+    character(0)
+  } else {
+    canonicalize_draw_names(full_order_raw, coef_meta, tv)
+  }
+
+  beta_source <- if (isTRUE(ms$fixed_effect_betas)) "fixed" else "random"
+  beta_names <- if (tv) {
+    c(
+      paste0("intercept_t", seq_len(Tn)),
+      as.vector(vapply(seq_len(Tn), function(t) paste0(cov_names, "_t", t), character(p)))
+    )
+  } else {
+    c("intercept", cov_names)
+  }
+
+  source_order <- if (identical(beta_source, "fixed")) fixed_order else random_order
+  idx_source_all <- match(beta_names, source_order)
+  if (anyNA(idx_source_all)) {
+    miss <- beta_names[is.na(idx_source_all)]
+    stop(
+      "Internal: could not map beta names in ", beta_source, " order. Missing: ",
+      paste(miss, collapse = ", ")
+    )
+  }
+
+  idx_full_all <- match(beta_names, full_order)
+  if (anyNA(idx_full_all)) {
+    miss <- beta_names[is.na(idx_full_all)]
+    stop(
+      "Internal: could not map beta names in full parameter order. Missing: ",
+      paste(miss, collapse = ", ")
+    )
+  }
+
+  if (tv) {
+    intercept_idx <- idx_source_all[seq_len(Tn)]
+    full_intercept_idx <- idx_full_all[seq_len(Tn)]
+    slope_idx <- if (p > 0L) {
+      matrix(idx_source_all[-seq_len(Tn)], nrow = p, ncol = Tn, byrow = FALSE)
+    } else {
+      matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+    full_slope_idx <- if (p > 0L) {
+      matrix(idx_full_all[-seq_len(Tn)], nrow = p, ncol = Tn, byrow = FALSE)
+    } else {
+      matrix(integer(0), nrow = 0, ncol = Tn)
+    }
+  } else {
+    intercept_idx <- idx_source_all[1L]
+    full_intercept_idx <- idx_full_all[1L]
+    slope_idx <- if (p > 0L) idx_source_all[-1L] else integer(0)
+    full_slope_idx <- if (p > 0L) idx_full_all[-1L] else integer(0)
+  }
+
+  list(
+    theta_order = fixed_order,
+    fixed_order = fixed_order,
+    random_order = random_order,
+    full_order = full_order,
+    beta_index_map = list(
+      source = beta_source,
+      intercept_idx = intercept_idx,
+      slope_idx = slope_idx,
+      full_intercept_idx = full_intercept_idx,
+      full_slope_idx = full_slope_idx,
+      tv = tv,
+      p = p,
+      Tn = Tn
+    )
+  )
+}
+
+
 # Slice a raw parameter vector into a minimal list the predictor needs, by index.
 # No names are used; only sizes/flags.
 slice_params_tmb <- function(par_vec, model_output) {
   # Pull meta
   ms   <- model_output$model_setup
   dat  <- model_output$data
-  p    <- if (!is.null(dat$covariate_rasters_list) && !is.null(dat$covariate_rasters_list[[1]]))
-    terra::nlyr(dat$covariate_rasters_list[[1]]) else 0L
-  Tn   <- length(dat$time_points)
+  coef_meta <- tryCatch(ms$coef_meta, error = function(e) NULL)
+  p    <- if (!is.null(coef_meta) && !is.null(coef_meta$p)) {
+    as.integer(coef_meta$p)
+  } else if (!is.null(dat$covariate_rasters_list) && !is.null(dat$covariate_rasters_list[[1]])) {
+    terra::nlyr(dat$covariate_rasters_list[[1]])
+  } else {
+    0L
+  }
+  Tn   <- if (!is.null(coef_meta) && !is.null(coef_meta$n_times)) {
+    as.integer(coef_meta$n_times)
+  } else {
+    length(dat$time_points)
+  }
   fam  <- ms$family
   fld  <- isTRUE(ms$field)
   iidf <- isTRUE(ms$iid)
@@ -599,48 +710,159 @@ slice_params_tmb <- function(par_vec, model_output) {
 
   n_poly <- nrow(dat$polygon_data)
 
-  idx <- 1L
+  par_vec <- as.numeric(par_vec)
 
-  # Fixed effects
-  if (tv) {
-    intercept_t <- par_vec[idx:(idx+Tn-1L)]; idx <- idx + Tn
-    slope_t_len <- p * Tn
-    slope_t <- if (slope_t_len > 0L) par_vec[idx:(idx+slope_t_len-1L)] else numeric(0)
-    idx <- idx + slope_t_len
+  # Keep a compatibility fallback for unnamed vectors.
+  slice_sequential <- function(vec) {
+    idx <- 1L
+
+    if (tv) {
+      intercept_t <- vec[idx:(idx + Tn - 1L)]; idx <- idx + Tn
+      slope_t_len <- p * Tn
+      slope_t <- if (slope_t_len > 0L) vec[idx:(idx + slope_t_len - 1L)] else numeric(0)
+      idx <- idx + slope_t_len
+      intercept <- NULL
+      slope <- numeric(0)
+    } else {
+      intercept <- vec[idx]; idx <- idx + 1L
+      slope <- if (p > 0L) vec[idx:(idx + p - 1L)] else numeric(0)
+      idx <- idx + p
+      intercept_t <- NULL
+      slope_t <- numeric(0)
+    }
+
+    log_tau_gaussian <- if (identical(fam, "gaussian")) { val <- vec[idx]; idx <- idx + 1L; val } else NULL
+
+    iideffect_log_tau <- NULL
+    iideffect <- numeric(0)
+    if (identical(fam, "negbinomial")) {
+      iideffect_log_tau <- vec[idx]; idx <- idx + 1L
+    } else if (iidf) {
+      iideffect_log_tau <- vec[idx]; idx <- idx + 1L
+      iideffect <- vec[idx:(idx + n_poly - 1L)]; idx <- idx + n_poly
+    }
+
+    log_sigma <- NULL
+    log_rho <- NULL
+    nodemean <- numeric(0)
+    if (fld) {
+      log_sigma <- vec[idx]; idx <- idx + 1L
+      log_rho <- vec[idx]; idx <- idx + 1L
+      if (idx <= length(vec)) nodemean <- vec[idx:length(vec)]
+    }
+
+    list(
+      intercept = intercept,
+      slope = slope,
+      intercept_t = intercept_t,
+      slope_t = slope_t,
+      iideffect_log_tau = iideffect_log_tau,
+      iideffect = iideffect,
+      log_tau_gaussian = log_tau_gaussian,
+      log_sigma = log_sigma,
+      log_rho = log_rho,
+      nodemean = nodemean,
+      p = p,
+      Tn = Tn,
+      tv = tv
+    )
+  }
+
+  ref_names <- tryCatch(names(model_output$obj$env$par), error = function(e) NULL)
+  par_names <- names(par_vec)
+  has_valid_names <- !is.null(par_names) &&
+    length(par_names) == length(par_vec) &&
+    !anyNA(par_names) &&
+    all(nzchar(par_names))
+
+  if (!has_valid_names && !is.null(ref_names) && length(ref_names) == length(par_vec)) {
+    names(par_vec) <- ref_names
+    par_names <- names(par_vec)
+    has_valid_names <- TRUE
+  }
+
+  if (!has_valid_names) return(slice_sequential(par_vec))
+
+  pull_idx <- function(key) which(par_names == key)
+  pull_vec <- function(key, expected_len = NULL, required = FALSE) {
+    idx <- pull_idx(key)
+    if (!length(idx)) {
+      if (isTRUE(required)) {
+        stop("Internal: required parameter block `", key, "` was not found in TMB parameter vector.")
+      }
+      return(NULL)
+    }
+    vals <- as.numeric(par_vec[idx])
+    if (!is.null(expected_len) && length(vals) != expected_len) {
+      stop(
+        "Internal: parameter block `", key, "` has length ", length(vals),
+        ", expected ", expected_len, "."
+      )
+    }
+    vals
+  }
+  pull_scalar <- function(key, required = FALSE) {
+    vals <- pull_vec(key, expected_len = 1L, required = required)
+    if (is.null(vals)) return(NULL)
+    vals[[1L]]
+  }
+  idx_in_range <- function(idx) {
+    idx <- as.integer(idx)
+    if (!length(idx)) return(TRUE)
+    all(idx >= 1L & idx <= length(par_vec))
+  }
+
+  beta_map <- tryCatch(ms$beta_index_map, error = function(e) NULL)
+  use_full_beta_idx <- !is.null(beta_map) &&
+    !is.null(beta_map$full_intercept_idx) &&
+    !is.null(beta_map$full_slope_idx) &&
+    idx_in_range(beta_map$full_intercept_idx) &&
+    idx_in_range(beta_map$full_slope_idx)
+
+  if (isTRUE(tv)) {
+    if (use_full_beta_idx) {
+      intercept_t <- as.numeric(par_vec[as.integer(beta_map$full_intercept_idx)])
+      slope_t <- if (p > 0L) as.numeric(par_vec[as.integer(as.vector(beta_map$full_slope_idx))]) else numeric(0)
+    } else {
+      intercept_t <- pull_vec("intercept_t", expected_len = Tn, required = TRUE)
+      slope_t <- if (p > 0L) pull_vec("slope_t", expected_len = p * Tn, required = TRUE) else numeric(0)
+    }
     intercept <- NULL
-    slope     <- numeric(0)
+    slope <- numeric(0)
   } else {
-    intercept <- par_vec[idx]; idx <- idx + 1L
-    slope     <- if (p > 0L) par_vec[idx:(idx+p-1L)] else numeric(0)
-    idx <- idx + p
+    if (use_full_beta_idx) {
+      intercept <- as.numeric(par_vec[as.integer(beta_map$full_intercept_idx[[1L]])])
+      slope <- if (p > 0L) as.numeric(par_vec[as.integer(beta_map$full_slope_idx)]) else numeric(0)
+    } else {
+      intercept <- pull_scalar("intercept", required = TRUE)
+      slope <- if (p > 0L) pull_vec("slope", expected_len = p, required = TRUE) else numeric(0)
+    }
     intercept_t <- NULL
-    slope_t     <- numeric(0)
+    slope_t <- numeric(0)
   }
 
-  # Gaussian-only noise (mapped out otherwise)
-  log_tau_gaussian <- if (identical(fam, "gaussian")) { val <- par_vec[idx]; idx <- idx + 1L; val } else NULL
+  log_tau_gaussian <- if (identical(fam, "gaussian")) pull_scalar("log_tau_gaussian", required = TRUE) else NULL
 
-  # IID / NB overdispersion
-  # NB (family == "negbinomial"): keep iideffect_log_tau, no iideffect vector
-  # Non-NB with iid: iideffect_log_tau + iideffect vector
   iideffect_log_tau <- NULL
-  iideffect         <- numeric(0)
+  iideffect <- numeric(0)
   if (identical(fam, "negbinomial")) {
-    iideffect_log_tau <- par_vec[idx]; idx <- idx + 1L
+    iideffect_log_tau <- pull_scalar("iideffect_log_tau", required = TRUE)
   } else if (iidf) {
-    iideffect_log_tau <- par_vec[idx]; idx <- idx + 1L
-    iideffect <- par_vec[idx:(idx+n_poly-1L)]; idx <- idx + n_poly
+    iideffect_log_tau <- pull_scalar("iideffect_log_tau", required = TRUE)
+    iideffect <- pull_vec("iideffect", expected_len = n_poly, required = TRUE)
   }
 
-  # Field hyper + nodemean
-  log_sigma <- NULL; log_rho <- NULL; nodemean <- numeric(0)
+  log_sigma <- NULL
+  log_rho <- NULL
+  nodemean <- numeric(0)
   if (fld) {
-    log_sigma <- par_vec[idx]; idx <- idx + 1L
-    log_rho   <- par_vec[idx]; idx <- idx + 1L
-    # Remaining tail is nodemean
-    if (idx <= length(par_vec)) {
-      nodemean <- par_vec[idx:length(par_vec)]
-      idx <- length(par_vec) + 1L
+    n_nodes <- tryCatch(nrow(dat$mesh$loc), error = function(e) NA_integer_)
+    log_sigma <- pull_scalar("log_sigma", required = TRUE)
+    log_rho <- pull_scalar("log_rho", required = TRUE)
+    nodemean <- if (is.na(n_nodes)) {
+      pull_vec("nodemean", required = TRUE)
+    } else {
+      pull_vec("nodemean", expected_len = n_nodes, required = TRUE)
     }
   }
 

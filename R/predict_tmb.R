@@ -135,11 +135,13 @@ predict_uncertainty_mmap <- function(model_output, new_data = NULL,
   ci_lower <- vector("list", n_times)
   ci_upper <- vector("list", n_times)
 
-  parameters <- model_output$obj$env$last.par.best
-  if (model_output$model_setup$iid || model_output$model_setup$field) {
+  has_random <- length(model_output$obj$env$random) > 0L
+  if (has_random) {
+    parameters <- model_output$obj$env$last.par.best
     ch <- Matrix::Cholesky(model_output$sd_out$jointPrecision)
     par_draws <- sparseMVN::rmvn.sparse(N, parameters, ch, prec = TRUE)
   } else {
+    parameters <- as.numeric(model_output$sd_out$par.fixed)
     covm <- Matrix::Matrix(model_output$sd_out$cov.fixed, sparse = TRUE)
     ch   <- Matrix::Cholesky(covm)
     par_draws <- sparseMVN::rmvn.sparse(N, parameters, ch, prec = FALSE)
