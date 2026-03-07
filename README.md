@@ -1,10 +1,12 @@
+[![R-CMD-check](https://github.com/nripstein/disaggMultiMap/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/nripstein/disaggMultiMap/actions/workflows/R-CMD-check.yaml)
+
 ## Installation
 
 You can install from Github with:
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("https://github.com/nripstein/disaggMultiMap")
+devtools::install_github("nripstein/disaggMultiMap")
 ```
 
 or the development branch from
@@ -23,8 +25,7 @@ dat <- prepare_data_mmap(
 )
 
 # 2) Fit model (TMB or AGHQ)
-fit <- disag_model_mmap(dat, engine = "TMB")
-# fit <- disag_model_mmap(dat, engine = "AGHQ", engine.args = list(aghq_k = 2))
+fit <- disag_model_mmap(dat, engine = "AGHQ")
 
 # 3) Predict
 pred <- predict(fit)
@@ -56,6 +57,3 @@ fit_tmb <- disag_model_mmap(
 )
 ```
 
-Backwards-compatible top-level `aghq_k`, `optimizer`, and engine-specific arguments
-passed via `...` are still supported in `disag_model_mmap()`, but are deprecated and
-will warn. Migrate those to `engine.args`.
